@@ -686,38 +686,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-```
-
----
-
-### **ΒΗΜΑ 4: Commit**
-
-**Scroll κάτω:**
-
-**Commit message:** "Fix PORT for Render"
-
-**Click:** "Commit changes"
-
----
-
-## 🔄 **ΒΗΜΑ 5: Render Auto-Redeploy**
-
-**Πίσω στο Render dashboard:**
-
-Θα δει το νέο commit και θα κάνει **auto-redeploy**!
-
-Περίμενε 1-2 λεπτά...
-
----
-
-## ✅ **Θα δεις:**
-```
-Deploy successful! ✅
-Live at: https://smart-kids-api-xxxx.onrender.com
   console.log(`\n${'='.repeat(55)}`);
   console.log(`🚀 SMART KIDS - Full Skroutz Categories`);
-  console.log(`   Server is live on the Network!`);
-  console.log(`   Local:   http://localhost:${PORT}`);
-  console.log(`   Network: http://YOUR_IP_HERE:${PORT}`); // Εδώ βάλε την IP σου αν θες να τη βλέπεις
+  console.log(`   Server is live on Render!`);
+  console.log(`   Port: ${PORT}`);
   console.log(`${'='.repeat(55)}\n`);
 });
