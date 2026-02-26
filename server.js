@@ -3,7 +3,7 @@ import http from 'http';
 import { URL } from 'url';
 import cors from 'cors';
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const SERPAPI_KEY = 'a2377d128c1ba155eb58dd575a16079c31730f0fdeab9d05014b01b8870053f1';
 
 // ============================================================
@@ -686,6 +686,34 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
+```
+
+---
+
+### **ΒΗΜΑ 4: Commit**
+
+**Scroll κάτω:**
+
+**Commit message:** "Fix PORT for Render"
+
+**Click:** "Commit changes"
+
+---
+
+## 🔄 **ΒΗΜΑ 5: Render Auto-Redeploy**
+
+**Πίσω στο Render dashboard:**
+
+Θα δει το νέο commit και θα κάνει **auto-redeploy**!
+
+Περίμενε 1-2 λεπτά...
+
+---
+
+## ✅ **Θα δεις:**
+```
+Deploy successful! ✅
+Live at: https://smart-kids-api-xxxx.onrender.com
   console.log(`\n${'='.repeat(55)}`);
   console.log(`🚀 SMART KIDS - Full Skroutz Categories`);
   console.log(`   Server is live on the Network!`);
