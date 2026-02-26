@@ -682,8 +682,10 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed' }));
     }
-  } else { res.writeHead(404); res.end('Not Found'); }
-});
+  } else { 
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Smart Kids API is Online and Ready! 🚀'); 
+  }
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n${'='.repeat(55)}`);
