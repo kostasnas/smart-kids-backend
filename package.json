@@ -1,0 +1,16 @@
+{
+  "name": "smart-kids-backend",
+  "version": "1.0.0",
+  "description": "Smart Kids Backend API",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "cors": "^2.8.5"
+  }
+}
