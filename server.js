@@ -685,7 +685,7 @@ const server = http.createServer(async (req, res) => {
   } else { 
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Smart Kids API is Online and Ready! 🚀'); 
-  }
+  } }
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n${'='.repeat(55)}`);
