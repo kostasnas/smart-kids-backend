@@ -677,7 +677,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ shopping_results: enriched, metadata: { total: enriched.length, category, categoryLabel: catLabel, availableFilters } }));
 
-    } catch (err) {
+   } catch (err) {
       console.error('❌', err);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed' }));
@@ -685,7 +685,8 @@ const server = http.createServer(async (req, res) => {
   } else { 
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Smart Kids API is Online and Ready! 🚀'); 
-  } }
+  }
+});
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n${'='.repeat(55)}`);
