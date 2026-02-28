@@ -1,56 +1,80 @@
-// server.js - Smart Kids Search - Full Skroutz Categories & Direct Links Fix
 import http from 'http';
 import { URL } from 'url';
-import fetch from 'node-fetch'; // Βεβαιώσου ότι έχεις κάνει npm install node-fetch αν δεν υπάρχει
+import fetch from 'node-fetch';
 
 const PORT = process.env.PORT || 3001;
 const SERPAPI_KEY = process.env.SERPAPI_KEY || 'a2377d128c1ba155eb58dd575a16079c31730f0fdeab9d05014b01b8870053f1';
 
-// ============================================================
-// NORMALIZE GREEK ACCENTS
-// ============================================================
-function normalizeGreek(str) {
-  return (str || '').toLowerCase()
-    .replace(/ά/g,'α').replace(/έ/g,'ε').replace(/ή/g,'η')
-    .replace(/ί/g,'ι').replace(/ό/g,'ο').replace(/ύ/g,'υ')
-    .replace(/ώ/g,'ω').replace(/ϊ/g,'ι').replace(/ϋ/g,'υ')
-    .replace(/ΐ/g,'ι').replace(/ΰ/g,'υ');
+function nm(str) {
+  return (str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/ά/g,'α').replace(/έ/g,'ε').replace(/ή/g,'η').replace(/ί/g,'ι').replace(/ό/g,'ο').replace(/ύ/g,'υ').replace(/ώ/g,'ω');
 }
 
-function nm(str) { return normalizeGreek(str); }
-
-// ============================================================
-// ALL 12 CATEGORIES - SKROUTZ ACCURATE
-// ============================================================
 const CATEGORIES = {
-  SHOES: {
-    label: 'Παιδικά Παπούτσια',
-    triggers: ['παπουτσια','παπουτσι','πεδιλα','μποτακια','μπαλαρινες','sneakers','shoes','boots','σανδαλια'],
-    filters: {
-      type: ['Sneakers / Αθλητικά','Casual / Καθημερινά','Πέδιλα / Σανδάλια','Μποτάκια','Μπαλαρίνες','Παντόφλες / Slippers','Πρώτα Βήματα'],
-      brand: ['Nike','Adidas','Puma','New Balance','Skechers','Converse','Vans','Reebok','ASICS','Fila','Geox','Clarks']
-    },
-    keywords: {
-      type: {
-        'Sneakers / Αθλητικά': ['αθλητικα','sneakers','sport','running','trainer'],
-        'Πέδιλα / Σανδάλια': ['πεδιλα','σανδαλια','sandal'],
-        'Μποτάκια': ['μποτακια','boot']
-      },
-      brand: { 'Nike': ['nike'],'Adidas': ['adidas'],'Puma': ['puma'] }
+  SHOES: { label: 'Παπούτσια', triggers: ['παπουτσια','sneakers','πεδιλα'], filters: { brand: ['Nike','Adidas','Puma'] } },
+  CLOTHES: { label: 'Μόδα', triggers: ['ρουχα','μπλουζα','φορεμα'], filters: { gender: ['Αγόρι','Κορίτσι'] } },
+  TOYS: { label: 'Παιχνίδια', triggers: ['παιχνιδι'], filters: {} }
+};
+
+function detectCategory(query) {
+  const q = nm(query);
+  for (const [name, cat] of Object.entries(CATEGORIES)) {
+    if (cat.triggers.some(t => q.includes(nm(t)))) return name;
+  }
+  return 'GENERAL';
+}
+
+function generateStoreLink(item) {
+  const source = (item.source || '').toLowerCase();
+  const title = item.title || '';
+  const enc = encodeURIComponent(title);
+  if (item.merchant_link && !item.merchant_link.includes('google.com')) return item.merchant_link;
+  
+  const stores = {
+    'skroutz': `https://www.skroutz.gr/search?keyphrase=${enc}`,
+    'bestprice': `https://www.bestprice.gr/search?q=${enc}`,
+    'zara': `https://www.zara.com/gr/el/search?searchTerm=${enc}`,
+    'public': `https://www.public.gr/search/?text=${enc}`,
+    'intersport': `https://www.intersport.gr/search?q=${enc}`,
+    'jumbo': `https://www.e-jumbo.gr/search?q=${enc}`,
+    'cosmos': `https://www.cosmossport.gr/search/?q=${enc}`,
+    'dpam': `https://www.dpam.com/gr-el/search/${enc}`
+  };
+
+  for (const [k, v] of Object.entries(stores)) { if (source.includes(k)) return v; }
+  return (item.product_link && !item.product_link.includes('google.com')) ? item.product_link : `https://www.bestprice.gr/search?q=${enc}`;
+}
+
+const server = http.createServer(async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+
+  const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
+  if (parsedUrl.pathname === '/api/search') {
+    try {
+      const q = parsedUrl.searchParams.get('q') || '';
+      const gender = parsedUrl.searchParams.get('gender') || '';
+      const query = `${q} παιδικά ${gender === 'Αγόρι' ? 'αγόρι' : 'κορίτσι'}`;
+      
+      const apiRes = await fetch(`https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&hl=el&gl=gr&api_key=${SERPAPI_KEY}`);
+      const data = await apiRes.json();
+      
+      const results = (data.shopping_results || []).map(item => ({
+        ...item,
+        buyLink: generateStoreLink(item),
+        category: detectCategory(q)
+      }));
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ shopping_results: results }));
+    } catch (err) {
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
     }
-  },
-  CLOTHES: {
-    label: 'Παιδική & Βρεφική Μόδα',
-    triggers: ['ρουχα','μπλουζα','παντελονι','φορμα','φουστα','μπουφαν','φορεμα','ζακετα','κολαν','σορτς','πιτζαμα','εσωρουχα','καλτσες','μαγιο'],
-    filters: {
-      type: ['Μπλούζες / T-Shirts','Παντελόνια / Τζιν','Φόρμες / Jogging','Φορέματα','Μπουφάν / Jackets'],
-      gender: ['Αγόρι','Κορίτσι','Unisex'],
-      brand: ['Zara Kids','H&M','DPAM','Orchestra','Next','GAP Kids','Carter\'s','Mothercare','Benetton','Mayoral']
-    },
-    keywords: {
-      type: { 'Μπλούζες / T-Shirts': ['μπλουζα','t-shirt','tshirt'], 'Φορέματα': ['φορεμα','dress'] },
-      brand: { 'Zara Kids': ['zara'],'H&M': ['h&m','h m'],'DPAM': ['dpam'] }
-    }
-  },
-  TOYS: { label: 'Παιχνίδια', triggers: ['παιχνιδι'], filters: {}, keywords: {} },
-  SCHOOL: { label: 'Σχολικά', triggers: ['σχολικα'], filters
+  } else {
+    res.writeHead(404); res.end();
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => console.log(`Server running on ${PORT}`));
