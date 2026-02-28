@@ -14,7 +14,9 @@ function nm(str) {
 function generateStoreLink(item) {
   const source = (item.source || '').toLowerCase();
   const title = item.title || '';
-  const enc = encodeURIComponent(title);
+  // Κρατάμε μόνο τις πρώτες 4 λέξεις του τίτλου για να πετυχαίνει η αναζήτηση στο eshop
+  const shortTitle = title.split(' ').slice(0, 4).join(' ');
+  const enc = encodeURIComponent(shortTitle);
   
   if (item.merchant_link && !item.merchant_link.includes('google.com')) return item.merchant_link;
   
