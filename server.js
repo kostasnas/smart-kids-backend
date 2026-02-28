@@ -615,7 +615,7 @@ function scoreProduct(item, gender) {
   return {
     priceValue, rating: item.rating || null, reviews: item.reviews || 0,
     genderScore, finalScore: Math.round(priceScore * 0.35 + ratingScore * 0.25 + reviewsScore * 0.15 + shopScore * 0.15 + genderScore * 0.10),
-    buyLink: item.product_link || item.link
+    buyLink: item.product_link || item.merchant_link || item.link
   };
 }
 
