@@ -219,42 +219,45 @@ function collectFilters(products, category) {
 }
 
 // ============================================================
-// IMPROVED LINK GENERATION
+// IMPROVED LINK GENERATION - AVOID 404s
 // ============================================================
 function generateStoreLink(item) {
   const source = (item.source || '').toLowerCase();
   
-  // Priority 1: Direct merchant link (if not Google)
-  if (item.merchant_link && !item.merchant_link.includes('google.com')) {
-    return item.merchant_link;
-  }
-  
-  // Priority 2: Product link (if not Google)
-  if (item.product_link && !item.product_link.includes('google.com')) {
+  // Priority 1: Direct product/merchant link (if exists and not Google)
+  if (item.product_link && !item.product_link.includes('google.com') && !item.product_link.includes('google.gr')) {
     return item.product_link;
   }
   
-  // Priority 3: Generate store search
-  const title = encodeURIComponent((item.title || '').substring(0, 100));
+  if (item.merchant_link && !item.merchant_link.includes('google.com') && !item.merchant_link.includes('google.gr')) {
+    return item.merchant_link;
+  }
   
-  const stores = {
-    'skroutz': `https://www.skroutz.gr/search?keyphrase=${title}`,
+  // Priority 2: Use aggregators (Skroutz/BestPrice) - more reliable
+  const title = encodeURIComponent((item.title || '').substring(0, 80));
+  
+  // If source contains known aggregators, use them
+  if (source.includes('skroutz')) {
+    return `https://www.skroutz.gr/search?keyphrase=${title}`;
+  }
+  
+  if (source.includes('bestprice')) {
+    return `https://www.bestprice.gr/search?q=${title}`;
+  }
+  
+  // Priority 3: Direct store search (only for major stores we trust)
+  const trustedStores = {
     'public': `https://www.public.gr/search/?text=${title}`,
-    'zara': `https://www.zara.com/gr/en/search?searchTerm=${title}`,
-    'h&m': `https://www2.hm.com/el_gr/search-results.html?q=${title}`,
-    'intersport': `https://www.intersport.gr/search?q=${title}`,
     'jumbo': `https://www.e-jumbo.gr/search?q=${title}`,
-    'cosmos': `https://www.cosmossport.gr/search/?q=${title}`,
-    'dpam': `https://www.dpam.com/gr-el/search/${title}`,
-    'mothercare': `https://www.mothercare.gr/search?q=${title}`
+    'intersport': `https://www.intersport.gr/search?q=${title}`,
   };
-
-  for (const [key, url] of Object.entries(stores)) {
+  
+  for (const [key, url] of Object.entries(trustedStores)) {
     if (source.includes(key)) return url;
   }
-
-  // Fallback: Use original link
-  return item.link;
+  
+  // Priority 4: Default to Skroutz (best Greek aggregator)
+  return `https://www.skroutz.gr/search?keyphrase=${title}`;
 }
 
 // ============================================================
