@@ -259,7 +259,25 @@ function generateStoreLink(item) {
   // Priority 4: Default to Skroutz (best Greek aggregator)
   return `https://www.skroutz.gr/search?keyphrase=${title}`;
 }
+// AGE RELEVANCE FILTER
+function isAgeRelevant(title, age) {
+  const t = (title || '').toLowerCase()
+    .replace(/ά/g,'α').replace(/έ/g,'ε').replace(/ή/g,'η')
+    .replace(/ί/g,'ι').replace(/ό/g,'ο').replace(/ύ/g,'υ').replace(/ώ/g,'ω');
 
+  const babyKws    = ['ισορροπιας','balance bike','πρωτα βηματα','βρεφικ','0-2','baby','bebe','βρεφ','walker','περιπατητης','παρκοκρεβατ'];
+  const toddlerKws = ['12 ιντσ','14 ιντσ','12"','14"','τρικυκλ','tricycle','2-4 ετων','3-5 ετων'];
+  const olderKws   = ['24 ιντσ','26 ιντσ','24"','26"','10-12','12 ετων','14 ετων','εφηβ'];
+
+  const isBaby    = babyKws.some(k => t.includes(k));
+  const isToddler = toddlerKws.some(k => t.includes(k));
+  const isOlder   = olderKws.some(k => t.includes(k));
+
+  if (age < 3)  return !isOlder;
+  if (age < 6)  return !isBaby && !isOlder;
+  if (age < 10) return !isBaby && !isToddler;
+  return !isBaby && !isToddler;
+}
 // ============================================================
 // SCORE PRODUCT
 // ============================================================
@@ -401,7 +419,7 @@ const server = http.createServer(async (req, res) => {
         ...scoreProduct(item, gender, age),
         attributes: extractAttributes(item, category),
         category
-      })).filter(p => p.genderScore > -50);
+      }).filter(p => p.genderScore > -50 && isAgeRelevant(p.title, age));
 
       // Sort by score
       enriched.sort((a, b) => b.finalScore - a.finalScore);
