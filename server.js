@@ -417,9 +417,9 @@ const server = http.createServer(async (req, res) => {
       let enriched = all.map(item => ({
         ...item,
         ...scoreProduct(item, gender, age),
-        attributes: extractAttributes(item, category),
+       attributes: extractAttributes(item, category),
         category
-      }).filter(p => p.genderScore > -50 && isAgeRelevant(p.title, age));
+      })).filter(p => p.genderScore > -50 && isAgeRelevant(p.title, age));
 
       // Sort by score
       enriched.sort((a, b) => b.finalScore - a.finalScore);
