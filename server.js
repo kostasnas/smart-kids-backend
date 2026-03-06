@@ -3,7 +3,7 @@ import http from 'http';
 import { URL } from 'url';
 
 const PORT = process.env.PORT || 3001;
-const SERPAPI_KEY = process.env.SERPAPI_KEY || 'a2377d128c1ba155eb58dd575a16079c31730f0fdeab9d05014b01b8870053f1';
+const SERPAPI_KEY = process.env.SERPAPI_KEY || 'e1940e07c1be5a27900226aec1aa5ddeebaba38f3fcd122bae4bdd491ae7ee36';
 
 // ============================================================
 // LINKWISE CONFIG
