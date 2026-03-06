@@ -63,44 +63,88 @@ async function fetchLinkwiseFeed() {
 // ============================================================
 // SEARCH LINKWISE PRODUCTS
 // ============================================================
-function searchLinkwise(products, query, gender, age, shoeSize, clothingSize) {
+
+// Χάρτης ελληνικών όρων αναζήτησης → λέξεις που βρίσκονται στα Linkwise δεδομένα
+const QUERY_MAP = {
+  'παπουτσι': ['παπουτσ', 'shoes', 'sneaker', 'boot', 'σανδαλ', 'πεδιλ', 'μποτ'],
+  'παπουτσια': ['παπουτσ', 'shoes', 'sneaker', 'boot', 'σανδαλ', 'πεδιλ', 'μποτ'],
+  'ρουχα': ['ρουχ', 'μπλουζ', 'παντελον', 'φορεμ', 'ζακετ', 'μπουφαν', 'φορμ', 'clothes', 'shirt', 'jeans'],
+  'μπλουζα': ['μπλουζ', 'shirt', 't-shirt'],
+  'παιχνιδι': ['παιχνιδ', 'toy', 'lego', 'playmobil', 'κουκλ', 'αυτοκινητ', 'τουβλ'],
+  'παιχνιδια': ['παιχνιδ', 'toy', 'lego', 'playmobil', 'κουκλ', 'αυτοκινητ', 'τουβλ'],
+  'toys': ['παιχνιδ', 'toy', 'lego', 'playmobil', 'τουβλ'],
+  'lego': ['lego'],
+  'playmobil': ['playmobil'],
+  'σχολικ': ['σχολικ', 'τσαντ', 'school', 'bag'],
+  'αθλητικ': ['αθλητικ', 'sport', 'μπαλ', 'football', 'basketball'],
+  'ποδηλατ': ['ποδηλατ', 'bike', 'bicycle', 'scooter', 'πατιν'],
+  'bike': ['ποδηλατ', 'bike', 'bicycle'],
+  'tablet': ['tablet', 'ipad', 'fire'],
+  'gaming': ['gaming', 'game', 'παιχνιδ', 'nintendo', 'playstation'],
+  'δωρο': ['παιχνιδ', 'toy', 'lego', 'κουκλ', 'δωρ'],
+  'βρεφικ': ['βρεφικ', 'baby', 'νεογν', 'μωρ'],
+  'baby': ['βρεφικ', 'baby', 'νεογν', 'μωρ'],
+};
+
+function getSearchTerms(query) {
   const q = nm(query);
+  const terms = new Set();
+
+  // Προσθήκη αρχικής λέξης
+  q.split(' ').filter(w => w.length > 2).forEach(w => terms.add(w));
+
+  // Επέκταση με χάρτη
+  for (const [key, expansions] of Object.entries(QUERY_MAP)) {
+    if (q.includes(key)) {
+      expansions.forEach(e => terms.add(e));
+    }
+  }
+
+  return Array.from(terms);
+}
+
+function cleanCategory(cat) {
+  // Αφαίρεση HTML entities και normalization
+  return nm((cat || '').replace(/&gt;/g, ' ').replace(/&lt;/g, ' ').replace(/&amp;/g, ' '));
+}
+
+function searchLinkwise(products, query, gender, age, shoeSize, clothingSize) {
   const genderGr = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
   const genderEn = gender === 'Αγόρι' ? 'boy' : 'girl';
+  const searchTerms = getSearchTerms(query);
 
   return products
     .filter(p => {
-      if (!p.in_stock || p.in_stock === '0' || p.in_stock === 'false') return false;
+      // in_stock μπορεί να λείπει — αν λείπει το αποδεχόμαστε
+      if (p.in_stock === '0' || p.in_stock === 'false') return false;
 
-      const title = nm(p.product_name || '');
-      const category = nm(p.category || '');
+      const title    = nm(p.product_name || '');
+      const category = cleanCategory(p.category);
+      const brand    = nm(p.brand_name || '');
+      const combined = `${title} ${category} ${brand}`;
 
-      // Έλεγχος αν το προϊόν ταιριάζει στο query
-      const queryWords = q.split(' ').filter(w => w.length > 2);
-      const matchesQuery = queryWords.some(word => title.includes(word) || category.includes(word));
+      // Τουλάχιστον 1 term να ταιριάζει
+      const matchesQuery = searchTerms.some(term => combined.includes(term));
       if (!matchesQuery) return false;
 
-      // Φίλτρο μεγέθους παπουτσιών
+      // Φίλτρο μεγέθους παπουτσιών (μόνο αν έχει size)
       if (shoeSize && p.size) {
         const sizeStr = nm(p.size);
         const targetSize = parseInt(shoeSize);
-        // Αποδεχόμαστε ±1 νούμερο
         const sizeMatch = [targetSize - 1, targetSize, targetSize + 1].some(s =>
           sizeStr.includes(String(s))
         );
         if (!sizeMatch) return false;
       }
 
-      // Φίλτρο μεγέθους ρούχων
+      // Φίλτρο μεγέθους ρούχων (μόνο αν έχει size)
       if (clothingSize && p.size && !shoeSize) {
-        const sizeStr = nm(p.size);
-        if (!sizeStr.includes(nm(clothingSize))) return false;
+        if (!nm(p.size).includes(nm(clothingSize))) return false;
       }
 
       return true;
     })
     .map(p => {
-      // Μετατροπή σε κοινή μορφή με SerpAPI
       const priceValue = parseFloat((p.price || '0').replace(',', '.').replace('€', '').trim()) || 0;
       const title = nm(p.product_name || '');
 
