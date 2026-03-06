@@ -6,46 +6,33 @@ const PORT = process.env.PORT || 3001;
 const SERPAPI_KEY = process.env.SERPAPI_KEY;
 
 // ============================================================
-// LINKWISE CONFIG
+// LINKWISE - ΞΕΧΩΡΙΣΤΑ FEEDS ΑΝΑ ΚΑΤΗΓΟΡΙΑ
 // ============================================================
-const LINKWISE_FEED_URL = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0/proginc-10784-281,11307-622,11036-369,11562-711,14015-2746,13506-2267/progex-0/feed.json';
+const LINKWISE_BASE = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0';
 
-// Cache για το Linkwise feed (ανανεώνεται κάθε 12 ώρες)
-let linkwiseCache = null;
-let linkwiseCacheTime = 0;
-const CACHE_TTL = 12 * 60 * 60 * 1000;
+const LINKWISE_FEEDS = {
+  // Παπούτσια: Serafino, Spartoo, Siontis
+  shoes: `${LINKWISE_BASE}/proginc-13255-2053,399-0,13884-0/progex-0/feed.json`,
+  // Παιχνίδια: Moustakas, Blabla, Toys.gr
+  toys:  `${LINKWISE_BASE}/proginc-10784-281,13506-2267,11307-622/progex-0/feed.json`,
+  // Βρεφικά/Ρούχα: Agnotis, Baby Valley, Babykid
+  baby:  `${LINKWISE_BASE}/proginc-11562-711,14015-2746,11036-369/progex-0/feed.json`,
+};
+
+// Cache ανά κατηγορία
+const feedCache = { shoes: null, toys: null, baby: null };
+const feedCacheTime = { shoes: 0, toys: 0, baby: 0 };
+const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 ώρες
 
 // ============================================================
-// FETCH LINKWISE FEED
+// NORMALIZE - αφαιρεί whitespace/newlines από Linkwise δεδομένα
 // ============================================================
-async function fetchLinkwiseFeed() {
-  const now = Date.now();
-  if (linkwiseCache && (now - linkwiseCacheTime) < CACHE_TTL) {
-    console.log('📦 Linkwise cache hit');
-    return linkwiseCache;
-  }
-
-  try {
-    console.log('🔄 Fetching Linkwise feed...');
-    const res = await fetch(LINKWISE_FEED_URL);
-    if (!res.ok) throw new Error(`Linkwise HTTP ${res.status}`);
-    const data = await res.json();
-    const all = Array.isArray(data) ? data : (data.products || data.items || []);
-    linkwiseCache = all.slice(0, 1000);
-    linkwiseCacheTime = now;
-    console.log(`✅ Linkwise feed: ${linkwiseCache.length}/${all.length} products cached`);
-    return linkwiseCache;
-  } catch (err) {
-    console.error('❌ Linkwise feed error:', err.message);
-    return linkwiseCache || [];
-  }
+function clean(str) {
+  return (str || '').replace(/\s+/g, ' ').trim();
 }
 
-// ============================================================
-// NORMALIZE GREEK
-// ============================================================
 function nm(str) {
-  return (str || '').toLowerCase()
+  return clean(str).toLowerCase()
     .replace(/ά/g,'α').replace(/έ/g,'ε').replace(/ή/g,'η')
     .replace(/ί/g,'ι').replace(/ό/g,'ο').replace(/ύ/g,'υ')
     .replace(/ώ/g,'ω').replace(/ϊ/g,'ι').replace(/ϋ/g,'υ')
@@ -53,16 +40,68 @@ function nm(str) {
 }
 
 // ============================================================
-// QUERY MAP - Ελληνικοί όροι → λέξεις στα Linkwise δεδομένα
+// FETCH LINKWISE FEED ΑΝΑ ΚΑΤΗΓΟΡΙΑ
+// ============================================================
+async function fetchFeed(type) {
+  const now = Date.now();
+  if (feedCache[type] && (now - feedCacheTime[type]) < CACHE_TTL) {
+    return feedCache[type];
+  }
+
+  try {
+    console.log(`🔄 Fetching Linkwise feed: ${type}...`);
+    const res  = await fetch(LINKWISE_FEEDS[type]);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const all  = Array.isArray(data) ? data : (data.products || data.items || []);
+
+    // Καθαρισμός δεδομένων + φιλτράρισμα μόνο παιδικά/unisex
+    feedCache[type] = all
+      .map(p => ({
+        ...p,
+        product_name: clean(p.product_name),
+        category:     clean(p.category),
+        brand_name:   clean(p.brand_name),
+        in_stock:     clean(p.in_stock),
+        price:        clean(p.price),
+        size:         clean(p.size),
+      }))
+      .filter(p => {
+        const cat = nm(p.category);
+        // Αποκλείουμε ανδρικά και γυναικεία
+        if (cat.includes('ανδρ') || cat.includes('andras') || cat.includes('men')) return false;
+        if (cat.includes('γυναικ') || cat.includes('gynaik') || cat.includes('women')) return false;
+        return true;
+      });
+
+    feedCacheTime[type] = now;
+    console.log(`✅ Feed ${type}: ${feedCache[type].length}/${all.length} παιδικά προϊόντα`);
+    return feedCache[type];
+  } catch (err) {
+    console.error(`❌ Feed ${type} error:`, err.message);
+    return feedCache[type] || [];
+  }
+}
+
+// Επιλογή σωστού feed βάσει query
+function selectFeedType(query, category) {
+  const q = nm(query);
+  if (category === 'SHOES' || q.includes('παπουτσ') || q.includes('shoes') || q.includes('sneaker') || q.includes('boot') || q.includes('σανδαλ')) return 'shoes';
+  if (category === 'TOYS'  || q.includes('παιχνιδ') || q.includes('lego')  || q.includes('playmobil') || q.includes('toy') || q.includes('δωρο'))    return 'toys';
+  return 'baby'; // ρούχα, βρεφικά, γενικά
+}
+
+// ============================================================
+// QUERY MAP - Ελληνικοί + Αγγλικοί όροι
 // ============================================================
 const QUERY_MAP = {
-  'παπουτσι':  ['shoes','sneaker','boot','sandal','παπουτσ','πεδιλ','σανδαλ','μποτ'],
-  'παπουτσια': ['shoes','sneaker','boot','sandal','παπουτσ','πεδιλ','σανδαλ','μποτ'],
-  'ρουχα':     ['ρουχ','μπλουζ','παντελον','φορεμ','ζακετ','μπουφαν','φορμ','shirt','jeans','dress'],
+  'παπουτσι':  ['παπουτσ','shoes','sneaker','boot','sandal','πεδιλ','σανδαλ','μποτ','μπαλαρ'],
+  'παπουτσια': ['παπουτσ','shoes','sneaker','boot','sandal','πεδιλ','σανδαλ','μποτ','μπαλαρ'],
+  'ρουχα':     ['ρουχ','μπλουζ','παντελον','φορεμ','ζακετ','μπουφαν','φορμ','shirt','jeans','dress','κολαν'],
   'μπλουζα':   ['μπλουζ','shirt','t-shirt'],
-  'παιχνιδι':  ['toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','game','figure','παιχνιδ'],
-  'παιχνιδια': ['toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','game','figure','παιχνιδ'],
-  'toys':      ['toy','lego','playmobil','τουβλ','game','figure'],
+  'παιχνιδι':  ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','game','figure','puzzle'],
+  'παιχνιδια': ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','game','figure','puzzle'],
+  'toys':      ['toy','lego','playmobil','τουβλ','game','figure','puzzle'],
   'lego':      ['lego'],
   'playmobil': ['playmobil'],
   'σχολικ':    ['school','bag','τσαντ','σχολικ'],
@@ -72,7 +111,7 @@ const QUERY_MAP = {
   'tablet':    ['tablet','ipad','fire'],
   'gaming':    ['gaming','nintendo','playstation','game'],
   'δωρο':      ['toy','lego','κουκλ','game','figure','παιχνιδ'],
-  'βρεφικ':    ['baby','βρεφικ','νεογν','μωρ'],
+  'βρεφικ':    ['baby','βρεφικ','νεογν','μωρ','βρεφος'],
   'baby':      ['baby','βρεφικ','νεογν','μωρ'],
 };
 
@@ -86,25 +125,25 @@ function getSearchTerms(query) {
   return Array.from(terms);
 }
 
-function cleanCategory(cat) {
-  return nm((cat || '').replace(/&gt;/g,' ').replace(/&lt;/g,' ').replace(/&amp;/g,' '));
-}
-
 // ============================================================
 // SEARCH LINKWISE PRODUCTS
 // ============================================================
 function searchLinkwise(products, query, gender, age, shoeSize, clothingSize) {
-  const genderGr  = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
-  const genderEn  = gender === 'Αγόρι' ? 'boy'   : 'girl';
+  const genderGr    = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
+  const genderEn    = gender === 'Αγόρι' ? 'boy'   : 'girl';
+  const oppGr       = gender === 'Αγόρι' ? 'κοριτσι' : 'αγορι';
+  const oppEn       = gender === 'Αγόρι' ? 'girl'    : 'boy';
   const searchTerms = getSearchTerms(query);
 
   return products
     .filter(p => {
-      if (p.in_stock === '0' || p.in_stock === 'false') return false;
+      // in_stock: αποδεχόμαστε Y, 1, true ή κενό (αγνοούμε αν λείπει)
+      const stock = nm(p.in_stock);
+      if (stock === '0' || stock === 'n' || stock === 'false') return false;
 
-      const title    = nm(p.product_name || '');
-      const category = cleanCategory(p.category);
-      const brand    = nm(p.brand_name || '');
+      const title    = nm(p.product_name);
+      const category = nm(p.category);
+      const brand    = nm(p.brand_name);
       const combined = `${title} ${category} ${brand}`;
 
       // Τουλάχιστον 1 term να ταιριάζει
@@ -114,26 +153,28 @@ function searchLinkwise(products, query, gender, age, shoeSize, clothingSize) {
       if (shoeSize && p.size) {
         const sizeStr    = nm(p.size);
         const targetSize = parseInt(shoeSize);
-        const sizeMatch  = [targetSize-1, targetSize, targetSize+1].some(s => sizeStr.includes(String(s)));
+        const sizeMatch  = [targetSize-1, targetSize, targetSize+1]
+          .some(s => sizeStr.split(',').map(x=>x.trim()).includes(String(s)));
         if (!sizeMatch) return false;
       }
 
       // Φίλτρο μεγέθους ρούχων
       if (clothingSize && p.size && !shoeSize) {
-        if (!nm(p.size).includes(nm(clothingSize))) return false;
+        const sizes = nm(p.size).split(',').map(x => x.trim());
+        if (!sizes.includes(nm(clothingSize))) return false;
       }
 
       return true;
     })
     .map(p => {
       const priceValue = parseFloat((p.price || '0').replace(',','.').replace('€','').trim()) || 0;
-      const title      = nm(p.product_name || '');
+      const title      = nm(p.product_name);
 
+      // Gender score
       let genderScore = 0;
-      if (title.includes(genderGr) || title.includes(genderEn)) genderScore = 80;
-      const oppGr = gender === 'Αγόρι' ? 'κοριτσι' : 'αγορι';
-      const oppEn = gender === 'Αγόρι' ? 'girl'    : 'boy';
-      if (title.includes(oppGr) || title.includes(oppEn)) genderScore = -150;
+      const catNm = nm(p.category);
+      if (title.includes(genderGr) || title.includes(genderEn) || catNm.includes(genderGr)) genderScore = 80;
+      if (title.includes(oppGr)    || title.includes(oppEn)    || catNm.includes(oppGr))    genderScore = -150;
 
       if (!isAgeRelevant(p.product_name, age)) return null;
 
@@ -147,15 +188,15 @@ function searchLinkwise(products, query, gender, age, shoeSize, clothingSize) {
         source:      extractStoreName(p.tracking_url || ''),
         thumbnail:   p.thumb_url || null,
         link:        p.tracking_url,
-        buyLink:     p.tracking_url,   // ← ΠΑΝΤΑ το affiliate link, ποτέ Skroutz
+        buyLink:     p.tracking_url,
         rating:      null,
         reviews:     0,
         brand:       p.brand_name || null,
-        discount:    p.discount || null,
+        discount:    p.discount   || null,
         on_sale:     p.on_sale === '1' || p.on_sale === 'true',
         isAffiliate: true,
         genderScore,
-        finalScore:  Math.round(priceScore * 0.4 + 60 * 0.4 + genderScore * 0.1 + 10),
+        finalScore:  Math.round(priceScore*0.4 + 60*0.4 + genderScore*0.1 + 10),
         source_type: 'linkwise',
         attributes:  {},
         category:    detectCategory(p.category || query),
@@ -452,10 +493,11 @@ const server = http.createServer(async (req, res) => {
       console.log(`${'='.repeat(55)}`);
 
       // ── 1. LINKWISE ───────────────────────────────────────
-      const feedProducts   = await fetchLinkwiseFeed();
+      const feedType     = selectFeedType(baseQuery, category);
+      const feedProducts = await fetchFeed(feedType);
       const linkwiseResults = searchLinkwise(feedProducts, baseQuery, gender, age, shoeSize, clothingSize)
         .map(p => ({ ...p, attributes: extractAttributes(p, category) }));
-      console.log(`📦 Linkwise: ${linkwiseResults.length} results`);
+      console.log(`📦 Linkwise [${feedType}]: ${linkwiseResults.length} results`);
 
       // ── 2. SERPAPI ────────────────────────────────────────
       let serpResults = [];
@@ -535,5 +577,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SMART KIDS - Linkwise + SerpAPI`);
   console.log(`   Server live on port ${PORT}`);
   console.log(`${'='.repeat(55)}\n`);
-  fetchLinkwiseFeed().catch(console.error);
+  // Pre-load όλα τα feeds στο startup
+  Promise.all([fetchFeed('shoes'), fetchFeed('toys'), fetchFeed('baby')]).catch(console.error);
 });
