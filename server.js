@@ -4,10 +4,12 @@ import { URL } from 'url';
 
 const PORT = process.env.PORT || 3001;
 const SERPAPI_KEY = process.env.SERPAPI_KEY;
+
 // ============================================================
 // LINKWISE CONFIG
 // ============================================================
-const LINKWISE_FEED_URL = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0/proginc-11562-711,14015-2746,11036-369,12761-1652,12323-1271,13506-2267,10632-237,138-2273,10784-281,13199-1967,12345-1289,469-299,469-2136,13255-2053,11307-622,11754-880/progex-0/feed.json';
+// Μόνο καταστήματα με παιδικά προϊόντα (μικρότερο feed = λιγότερη μνήμη)
+const LINKWISE_FEED_URL = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0/proginc-10784-281,11307-622,11036-369,11562-711,14015-2746,13506-2267/progex-0/feed.json';
 
 const LINKWISE_STORE_IDS = {
   'moustakastoys.gr': 10784,
@@ -26,10 +28,10 @@ const LINKWISE_STORE_IDS = {
   'shein.com': 13924,
 };
 
-// Cache για το Linkwise feed (ανανεώνεται κάθε 6 ώρες)
+// Cache για το Linkwise feed (ανανεώνεται κάθε 12 ώρες για να μη φορτώνει συχνά)
 let linkwiseCache = null;
 let linkwiseCacheTime = 0;
-const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 ώρες
+const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 ώρες
 
 // ============================================================
 // FETCH LINKWISE FEED
@@ -46,9 +48,11 @@ async function fetchLinkwiseFeed() {
     const res = await fetch(LINKWISE_FEED_URL);
     if (!res.ok) throw new Error(`Linkwise HTTP ${res.status}`);
     const data = await res.json();
-    linkwiseCache = Array.isArray(data) ? data : (data.products || data.items || []);
+    // Κρατάμε max 1000 προϊόντα για να μη φάμε τη μνήμη του Render (512MB limit)
+    const all = Array.isArray(data) ? data : (data.products || data.items || []);
+    linkwiseCache = all.slice(0, 1000);
     linkwiseCacheTime = now;
-    console.log(`✅ Linkwise feed: ${linkwiseCache.length} products cached`);
+    console.log(`✅ Linkwise feed: ${linkwiseCache.length}/${all.length} products cached`);
     return linkwiseCache;
   } catch (err) {
     console.error('❌ Linkwise feed error:', err.message);
