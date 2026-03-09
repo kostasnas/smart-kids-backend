@@ -47,21 +47,26 @@ async function fetchFeed() {
     const all  = Array.isArray(data) ? data : (data.products || data.items || []);
 
     feedCache = all
-      .map(p => ({
-        ...p,
-        product_name: clean(p.product_name),
-        category:     clean(p.category),
-        brand_name:   clean(p.brand_name),
-        in_stock:     clean(p.in_stock),
-        price:        clean(p.price),
-        size:         clean(p.size),
-      }))
       .filter(p => {
-        const cat = nm(p.category);
+        const stock = (p.in_stock || '').toString().toLowerCase().trim();
+        if (stock === '0' || stock === 'n' || stock === 'false') return false;
+        const cat = nm(p.category || '');
         if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) return false;
         if (cat.includes('γυναικ') || cat.includes('women')) return false;
         return true;
-      });
+      })
+      .map(p => ({
+        product_name: clean(p.product_name),
+        category:     clean(p.category),
+        brand_name:   clean(p.brand_name),
+        tracking_url: p.tracking_url,
+        thumb_url:    p.thumb_url,
+        in_stock:     '1',
+        on_sale:      p.on_sale,
+        price:        clean(p.price),
+        discount:     p.discount,
+        size:         clean(p.size),
+      }));
 
     feedCacheTime = now;
     console.log(`✅ Unified feed: ${feedCache.length}/${all.length} products`);
