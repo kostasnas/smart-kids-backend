@@ -129,22 +129,58 @@ function getClothingSize(age) {
 const CATEGORIES = {
   SHOES: {
     label:    'Παιδικά Παπούτσια',
-    triggers: ['παπουτσια','παπουτσι','πεδιλα','μποτακια','sneakers','shoes','boots','σανδαλια'],
+    triggers: ['παπουτσια','παπουτσι','πεδιλα','μποτακια','sneakers','shoes','boots','σανδαλια','υποδηματα'],
     filters:  { size: ['17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40'] },
     keywords: { size: Object.fromEntries([...Array(24)].map((_,i)=>{ const s=String(17+i); return [s,[s]]; })) }
   },
   CLOTHES: {
     label:    'Παιδική & Βρεφική Μόδα',
-    triggers: ['ρουχα','μπλουζα','παντελονι','φορμα','φουστα','μπουφαν','φορεμα','ζακετα'],
+    triggers: ['ρουχα','μπλουζα','παντελονι','φορμα','φουστα','μπουφαν','φορεμα','ζακετα','κολαν','πιτζαμα','εσωρουχα','καλτσες','μαγιο','μαγιω','μαγιώ','swimwear','μπικινι','ολοσωμο','παρεο','swim'],
     filters:  { size: ['50','56','62','68','74','80','86','92','98','104','110','116','122','128','134','140','146','152','158','164','170'] },
     keywords: { size: { '50':['50'],'56':['56'],'62':['62'],'68':['68'],'74':['74'],'80':['80'],'86':['86'],'92':['92'],'98':['98'],'104':['104'],'110':['110'],'116':['116'],'122':['122'],'128':['128'],'134':['134'],'140':['140'],'146':['146'],'152':['152'],'158':['158'],'164':['164'],'170':['170'] } }
   },
+  SWIMWEAR: {
+    label:    'Παιδικά Μαγιό & Καλοκαιρινά',
+    triggers: ['μαγιο','μαγιω','μαγιό','swimwear','μπικινι','ολοσωμο μαγιο','παιδικο μαγιο','swim'],
+    filters:  { size: ['74','80','86','92','98','104','110','116','122','128','134','140','146','152','158','164'], type: ['Ολόσωμο','Μπικίνι / Δύο τεμάχια','Σορτς / Μπόξερ','Παρεό'] },
+    keywords: {
+      size: { '74':['74'],'80':['80'],'86':['86'],'92':['92'],'98':['98'],'104':['104'],'110':['110'],'116':['116'],'122':['122'],'128':['128'],'134':['134'],'140':['140'],'146':['146'],'152':['152'],'158':['158'],'164':['164'] },
+      type: { 'Ολόσωμο':['ολοσωμο','one piece','swimsuit'], 'Μπικίνι / Δύο τεμάχια':['μπικινι','bikini','δυο τεμ'], 'Σορτς / Μπόξερ':['σορτς','boxer','swim short'], 'Παρεό':['παρεο','pareo'] }
+    }
+  },
   TOYS: {
     label:    'Παιχνίδια',
-    triggers: ['παιχνιδι','παιχνιδια','κουκλα','lego','playmobil','toy','δωρο'],
-    filters:  { brand: ['LEGO','Playmobil','Mattel','Hasbro','Fisher-Price'] },
+    triggers: ['παιχνιδι','παιχνιδια','κουκλα','lego','playmobil','toy','δωρο','puzzle','παζλ','επιτραπεζιο'],
+    filters:  { brand: ['LEGO','Playmobil','Mattel','Hasbro','Fisher-Price','Clementoni'] },
+    keywords: { brand: { 'LEGO':['lego'],'Playmobil':['playmobil'],'Mattel':['mattel'],'Hasbro':['hasbro'],'Fisher-Price':['fisher'],'Clementoni':['clementoni'] } }
+  },
+  SCHOOL: {
+    label:    'Σχολικά Είδη',
+    triggers: ['σχολικα','τσαντα','κασετινα','μολυβι','τετραδιο','σχολειο','school'],
+    filters:  { type: ['Τσάντες','Κασετίνες','Γραφική Ύλη','Τετράδια'] },
+    keywords: { type: { 'Τσάντες':['τσαντ'],'Κασετίνες':['κασετ'],'Γραφική Ύλη':['μολυβ','στυλο','μαρκαδ'],'Τετράδια':['τετραδ'] } }
+  },
+  SPORTS: {
+    label:    'Αθλητικά Είδη',
+    triggers: ['αθλητικα','ποδοσφαιρο','μπαλα','ποδοσφαιρικα','αθλητισμος','sport'],
+    filters:  { type: ['Ρούχα','Παπούτσια','Εξοπλισμός'] },
     keywords: {}
-  }
+  },
+  SUMMER: {
+    label:    'Καλοκαιρινά',
+    triggers: ['καλοκαιρινα','summer','παραλια','θαλασσα','ηλιος','beach'],
+    filters:  { size: ['80','86','92','98','104','110','116','122','128','134','140','146','152','158','164'], type: ['Μαγιό','Σορτς','Μπλούζες','Παπούτσια Θαλάσσης','Αξεσουάρ'] },
+    keywords: {
+      size: { '80':['80'],'86':['86'],'92':['92'],'98':['98'],'104':['104'],'110':['110'],'116':['116'],'122':['122'],'128':['128'],'134':['134'],'140':['140'],'146':['146'],'152':['152'],'158':['158'],'164':['164'] },
+      type: { 'Μαγιό':['μαγιο','swimwear'],'Σορτς':['σορτς','short'],'Μπλούζες':['μπλουζ','t-shirt'],'Παπούτσια Θαλάσσης':['θαλασσ','aqua','flipflop'],'Αξεσουάρ':['καπελ','γυαλι','αντηλι'] }
+    }
+  },
+  BABY: {
+    label:    'Βρεφικά Είδη',
+    triggers: ['βρεφικα','βρεφος','μωρο','baby','νεογεννητο','βρεφη'],
+    filters:  { size: ['50','56','62','68','74','80','86','92'] },
+    keywords: { size: { '50':['50'],'56':['56'],'62':['62'],'68':['68'],'74':['74'],'80':['80'],'86':['86'],'92':['92'] } }
+  },
 };
 
 function detectCategory(query) {
@@ -474,6 +510,48 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed', message: err.message }));
     }
+  } else if (pathname === '/api/ai' && req.method === 'POST') {
+    // ── AI Advisor endpoint ──────────────────────────────
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { messages, kidContext } = JSON.parse(body);
+        const Anthropic = (await import('@anthropic-ai/sdk')).default;
+        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+        const response = await client.messages.create({
+          model: 'claude-opus-4-5',
+          max_tokens: 1024,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          system: `Είσαι ο AI σύμβουλος αγορών της εφαρμογής Smart Kids για Έλληνες γονείς.
+
+ΠΡΟΦΙΛ ΠΑΙΔΙΩΝ:
+${kidContext || 'Δεν υπάρχουν καταχωρημένα παιδιά'}
+
+ΚΑΝΟΝΕΣ:
+- Απαντάς ΠΑΝΤΑ στα Ελληνικά
+- Ψάχνεις πάντα στο web για ΕΛΛΗΝΙΚΑ καταστήματα (skroutz.gr, e-shop.gr, public.gr, jumbo.gr, intersport.gr, zara.com, hm.com, spartoo.gr, mymarket.gr)
+- Δίνεις 3-5 ΣΥΓΚΕΚΡΙΜΕΝΕΣ προτάσεις με ΑΚΡΙΒΕΣ URL αγοράς
+- Χρησιμοποιείς το σωστό μέγεθος/νούμερο από το προφίλ
+- Μορφή κάθε πρότασης: **Όνομα Προϊόντος** (~XX€) — URL
+- Είσαι σύντομος και πρακτικός`,
+          messages: messages,
+        });
+
+        const text = response.content
+          .filter(b => b.type === 'text')
+          .map(b => b.text)
+          .join('\n');
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ response: text }));
+      } catch (err) {
+        console.error('AI error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
   } else {
     res.writeHead(404); res.end('Not Found');
   }
