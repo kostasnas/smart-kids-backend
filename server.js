@@ -25,7 +25,7 @@ const SERP_ONLY_CATEGORIES = ['sports', 'bikes', 'tech', 'gaming', 'school_bags'
 
 const feedCache = { shoes: null, clothes: null, toys: null };
 const feedCacheTime = { shoes: 0, clothes: 0, toys: 0 };
-const CACHE_TTL = 12 * 60 * 60 * 1000;
+const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — shorter to free RAM
 
 // ============================================================
 // HELPERS
@@ -44,10 +44,14 @@ function nm(str) {
 // FETCH LINKWISE FEED
 // ============================================================
 async function fetchFeed(type) {
-  // For general searches, merge shoes + clothes feeds
+  // For general searches: load shoes first, if < 1000 results add clothes
   if (type === 'general') {
-    const [s, c] = await Promise.all([fetchFeed('shoes'), fetchFeed('clothes')]);
-    return [...s, ...c];
+    const s = await fetchFeed('shoes');
+    if (s.length < 800) {
+      const c = await fetchFeed('clothes');
+      return [...s, ...c.slice(0, 1500)];
+    }
+    return s;
   }
   const now = Date.now();
   if (feedCache[type] && (now - feedCacheTime[type]) < CACHE_TTL) return feedCache[type];
@@ -59,30 +63,35 @@ async function fetchFeed(type) {
     const data = await res.json();
     const all  = Array.isArray(data) ? data : (data.products || data.items || []);
 
-    feedCache[type] = all
-      .filter(p => {
-        const stock = (p.in_stock || '').toString().toLowerCase().trim();
-        if (stock === '0' || stock === 'n' || stock === 'false') return false;
-        const cat = nm(p.category || '');
-        if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) return false;
-        if (cat.includes('γυναικ') || cat.includes('women')) return false;
-        return true;
-      })
-      .map(p => ({
+    // Strict memory limit: keep max 2500 products per feed
+    const MAX_PER_FEED = 2500;
+    const filtered = [];
+    for (const p of all) {
+      if (filtered.length >= MAX_PER_FEED) break;
+      const stock = (p.in_stock || '').toString().toLowerCase().trim();
+      if (stock === '0' || stock === 'n' || stock === 'false') continue;
+      const cat = nm(p.category || '');
+      if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) continue;
+      if (cat.includes('γυναικ') || cat.includes('women')) continue;
+      if (!p.price || !p.product_name) continue;
+      filtered.push({
         product_name: clean(p.product_name),
         category:     clean(p.category),
         brand_name:   clean(p.brand_name),
         tracking_url: p.tracking_url,
         thumb_url:    p.thumb_url,
-        in_stock:     '1',
         on_sale:      p.on_sale,
         price:        clean(p.price),
         discount:     p.discount,
         size:         clean(p.size),
-      }));
+      });
+    }
+    feedCache[type] = filtered;
 
     feedCacheTime[type] = now;
-    console.log(`✅ Feed ${type}: ${feedCache[type].length}/${all.length} products`);
+    console.log(`✅ Feed ${type}: ${feedCache[type].length}/${all.length} products | ~${Math.round(JSON.stringify(feedCache[type]).length/1024)}KB`);
+    // Force GC hint
+    if (global.gc) global.gc();
     return feedCache[type];
   } catch (err) {
     console.error(`❌ Feed ${type} error:`, err.message);
@@ -600,4 +609,21 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SMART KIDS Server on port ${PORT}`);
   console.log(`${'='.repeat(50)}\n`);
   // Load feeds on-demand to save RAM — no preload at startup
+
+  // Periodic cache eviction every 30min to free memory
+  setInterval(() => {
+    const now = Date.now();
+    let freed = 0;
+    for (const type of ['shoes','clothes','toys']) {
+      if (feedCache[type] && (now - feedCacheTime[type]) > 30 * 60 * 1000) {
+        feedCache[type] = null;
+        feedCacheTime[type] = 0;
+        freed++;
+      }
+    }
+    if (freed > 0) {
+      console.log(`🧹 Evicted ${freed} feed cache(s) to free memory`);
+      if (global.gc) global.gc();
+    }
+  }, 30 * 60 * 1000);
 });
