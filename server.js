@@ -10,13 +10,21 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY;
 // ============================================================
 const LW_BASE = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0';
 
-const LW_FEED_URL = `${LW_BASE}/proginc-10784-281,11307-622,13208-2081,11562-711,14015-2746,11036-369,12761-1652,12323-1271,13506-2267,10632-237,13712-2432,11754-880,11764-1059,13604-2421,138-2273,12174-1176,14123-2770,13199-1967,12345-1289,385-251,469-2142,469-2139,469-2136,469-301,469-300,469-299,13255-2053,13884-2555/progex-0/feed.json`;
+// Split into 3 feeds to stay within 512MB RAM limit
+const LW_FEEDS = {
+  // Παπούτσια
+  shoes: `${LW_BASE}/proginc-13255-2053,13884-2555,385-251,469-2142,469-2139,469-2136,469-301,469-300,469-299/progex-0/feed.json`,
+  // Παιχνίδια + Σχολικά
+  toys:  `${LW_BASE}/proginc-10784-281,11307-622,13208-2081,13506-2267,10632-237,12323-1271,12761-1652/progex-0/feed.json`,
+  // Ρούχα + Βρεφικά
+  clothes: `${LW_BASE}/proginc-11562-711,14015-2746,11036-369,13712-2432,11754-880,11764-1059,13604-2421,138-2273,12174-1176,14123-2770,13199-1967,12345-1289/progex-0/feed.json`,
+};
 
 // Ποιες κατηγορίες χρησιμοποιούν ΜΟΝΟ SerpAPI (δεν υπάρχουν στο Linkwise)
 const SERP_ONLY_CATEGORIES = ['sports', 'bikes', 'tech', 'gaming', 'school_bags', 'school_supplies', 'baby_gear', 'baby_safety'];
 
-let feedCache = null;
-let feedCacheTime = 0;
+const feedCache = { shoes: null, clothes: null, toys: null };
+const feedCacheTime = { shoes: 0, clothes: 0, toys: 0 };
 const CACHE_TTL = 12 * 60 * 60 * 1000;
 
 // ============================================================
@@ -35,18 +43,18 @@ function nm(str) {
 // ============================================================
 // FETCH LINKWISE FEED
 // ============================================================
-async function fetchFeed() {
+async function fetchFeed(type) {
   const now = Date.now();
-  if (feedCache && (now - feedCacheTime) < CACHE_TTL) return feedCache;
+  if (feedCache[type] && (now - feedCacheTime[type]) < CACHE_TTL) return feedCache[type];
 
   try {
-    console.log('🔄 Fetching unified Linkwise feed...');
-    const res  = await fetch(LW_FEED_URL);
+    console.log(`🔄 Fetching feed: ${type}`);
+    const res  = await fetch(LW_FEEDS[type]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const all  = Array.isArray(data) ? data : (data.products || data.items || []);
 
-    feedCache = all
+    feedCache[type] = all
       .filter(p => {
         const stock = (p.in_stock || '').toString().toLowerCase().trim();
         if (stock === '0' || stock === 'n' || stock === 'false') return false;
@@ -68,20 +76,25 @@ async function fetchFeed() {
         size:         clean(p.size),
       }));
 
-    feedCacheTime = now;
-    console.log(`✅ Unified feed: ${feedCache.length}/${all.length} products`);
-    return feedCache;
+    feedCacheTime[type] = now;
+    console.log(`✅ Feed ${type}: ${feedCache[type].length}/${all.length} products`);
+    return feedCache[type];
   } catch (err) {
-    console.error('❌ Feed error:', err.message);
-    return feedCache || [];
+    console.error(`❌ Feed ${type} error:`, err.message);
+    return feedCache[type] || [];
   }
 }
 
 // Επιλογή feed ανά κατηγορία offers
 function getFeedTypeForCategory(offersCategory) {
-  // All categories now use the unified feed
-  const linkwiseCategories = ['shoes','baby_shoes','toys','baby_toys','clothes','baby_clothes','baby_essentials'];
-  return linkwiseCategories.includes(offersCategory) ? 'all' : null;
+  if (['shoes','baby_shoes'].includes(offersCategory))                        return 'shoes';
+  if (['toys','baby_toys'].includes(offersCategory))                          return 'toys';
+  if (['clothes','baby_clothes','baby_essentials'].includes(offersCategory))  return 'clothes';
+  // For Home search, detect from category
+  if (offersCategory === 'SHOES')   return 'shoes';
+  if (offersCategory === 'TOYS')    return 'toys';
+  if (offersCategory === 'CLOTHES' || offersCategory === 'SWIMWEAR' || offersCategory === 'BABY') return 'clothes';
+  return null;
 }
 
 // ============================================================
@@ -455,7 +468,7 @@ const server = http.createServer(async (req, res) => {
 
   if (parsedUrl.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status:'ok', cacheSize: feedCache?.length || 0, cacheAge: Math.round((Date.now()-feedCacheTime)/60000) + 'min' }));
+    res.end(JSON.stringify({ status:'ok', cache: Object.fromEntries(Object.keys(feedCache).map(k => [k, feedCache[k]?.length || 0])) }));
     return;
   }
 
@@ -484,7 +497,7 @@ const server = http.createServer(async (req, res) => {
       // ── LINKWISE: μόνο για κατηγορίες που υπάρχουν στα feeds ──
       const feedType = getFeedTypeForCategory(effectiveCategory);
       if (feedType) {
-        const feedProducts = await fetchFeed();
+        const feedProducts = await fetchFeed(feedType);
         linkwiseResults = searchLinkwise(feedProducts, effectiveCategory, gender, age, shoeSize, clothingSize)
           .map(p => ({ ...p, attributes: extractAttributes(p, category), category: effectiveCategory }));
         console.log(`📦 Linkwise [${feedType}]: ${linkwiseResults.length}`);
@@ -563,5 +576,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n${'='.repeat(50)}`);
   console.log(`🚀 SMART KIDS Server on port ${PORT}`);
   console.log(`${'='.repeat(50)}\n`);
-  fetchFeed().catch(console.error);
+  // Load feeds on-demand to save RAM — no preload at startup
 });
