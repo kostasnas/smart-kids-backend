@@ -510,48 +510,6 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed', message: err.message }));
     }
-  } else if (pathname === '/api/ai' && req.method === 'POST') {
-    // ── AI Advisor endpoint ──────────────────────────────
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { messages, kidContext } = JSON.parse(body);
-        const Anthropic = (await import('@anthropic-ai/sdk')).default;
-        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-        const response = await client.messages.create({
-          model: 'claude-opus-4-5',
-          max_tokens: 1024,
-          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-          system: `Είσαι ο AI σύμβουλος αγορών της εφαρμογής Smart Kids για Έλληνες γονείς.
-
-ΠΡΟΦΙΛ ΠΑΙΔΙΩΝ:
-${kidContext || 'Δεν υπάρχουν καταχωρημένα παιδιά'}
-
-ΚΑΝΟΝΕΣ:
-- Απαντάς ΠΑΝΤΑ στα Ελληνικά
-- Ψάχνεις πάντα στο web για ΕΛΛΗΝΙΚΑ καταστήματα (skroutz.gr, e-shop.gr, public.gr, jumbo.gr, intersport.gr, zara.com, hm.com, spartoo.gr, mymarket.gr)
-- Δίνεις 3-5 ΣΥΓΚΕΚΡΙΜΕΝΕΣ προτάσεις με ΑΚΡΙΒΕΣ URL αγοράς
-- Χρησιμοποιείς το σωστό μέγεθος/νούμερο από το προφίλ
-- Μορφή κάθε πρότασης: **Όνομα Προϊόντος** (~XX€) — URL
-- Είσαι σύντομος και πρακτικός`,
-          messages: messages,
-        });
-
-        const text = response.content
-          .filter(b => b.type === 'text')
-          .map(b => b.text)
-          .join('\n');
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ response: text }));
-      } catch (err) {
-        console.error('AI error:', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
   } else {
     res.writeHead(404); res.end('Not Found');
   }
