@@ -43,55 +43,78 @@ function nm(str) {
 // ============================================================
 // FETCH LINKWISE FEED
 // ============================================================
-async function fetchFeed(type) {
-  // For general searches: load shoes first, if < 1000 results add clothes
-  if (type === 'general') {
-    const s = await fetchFeed('shoes');
-    if (s.length < 800) {
-      const c = await fetchFeed('clothes');
-      return [...s, ...c.slice(0, 1500)];
+// Parse a JSON array text and return max N filtered items WITHOUT loading full array
+function parseFeedLimited(text, maxItems) {
+  const results = [];
+  // Find start of array
+  const start = text.indexOf('[');
+  if (start === -1) return results;
+
+  let depth = 0;
+  let objStart = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length && results.length < maxItems; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        try {
+          const obj = JSON.parse(text.slice(objStart, i + 1));
+          // Filter inline
+          const stock = (obj.in_stock || '').toString().toLowerCase().trim();
+          if (stock === '0' || stock === 'n' || stock === 'false') { objStart = -1; continue; }
+          if (!obj.price || !obj.product_name) { objStart = -1; continue; }
+          const cat = nm(obj.category || '');
+          if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) { objStart = -1; continue; }
+          if (cat.includes('γυναικ') || cat.includes('women')) { objStart = -1; continue; }
+          results.push({
+            product_name: clean(obj.product_name),
+            category:     clean(obj.category),
+            brand_name:   clean(obj.brand_name),
+            tracking_url: obj.tracking_url,
+            thumb_url:    obj.thumb_url,
+            on_sale:      obj.on_sale,
+            price:        clean(obj.price),
+            discount:     obj.discount,
+            size:         clean(obj.size),
+          });
+        } catch {}
+        objStart = -1;
+      }
     }
-    return s;
   }
+  return results;
+}
+
+async function fetchFeed(type) {
+  // For general: only load shoes (most common searches)
+  if (type === 'general') return fetchFeed('shoes');
+
   const now = Date.now();
   if (feedCache[type] && (now - feedCacheTime[type]) < CACHE_TTL) return feedCache[type];
 
   try {
     console.log(`🔄 Fetching feed: ${type}`);
-    const res  = await fetch(LW_FEEDS[type]);
+    const res = await fetch(LW_FEEDS[type]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const all  = Array.isArray(data) ? data : (data.products || data.items || []);
 
-    // Strict memory limit: keep max 2500 products per feed
-    const MAX_PER_FEED = 2500;
-    const filtered = [];
-    for (const p of all) {
-      if (filtered.length >= MAX_PER_FEED) break;
-      const stock = (p.in_stock || '').toString().toLowerCase().trim();
-      if (stock === '0' || stock === 'n' || stock === 'false') continue;
-      const cat = nm(p.category || '');
-      if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) continue;
-      if (cat.includes('γυναικ') || cat.includes('women')) continue;
-      if (!p.price || !p.product_name) continue;
-      filtered.push({
-        product_name: clean(p.product_name),
-        category:     clean(p.category),
-        brand_name:   clean(p.brand_name),
-        tracking_url: p.tracking_url,
-        thumb_url:    p.thumb_url,
-        on_sale:      p.on_sale,
-        price:        clean(p.price),
-        discount:     p.discount,
-        size:         clean(p.size),
-      });
-    }
-    feedCache[type] = filtered;
+    // Get text, parse limited — avoids double-memory of JSON.parse on huge array
+    const text = await res.text();
+    const MAX_PER_FEED = 2000;
+    feedCache[type] = parseFeedLimited(text, MAX_PER_FEED);
 
     feedCacheTime[type] = now;
-    console.log(`✅ Feed ${type}: ${feedCache[type].length}/${all.length} products | ~${Math.round(JSON.stringify(feedCache[type]).length/1024)}KB`);
-    // Force GC hint
-    if (global.gc) global.gc();
+    console.log(`✅ Feed ${type}: ${feedCache[type].length} products kept`);
     return feedCache[type];
   } catch (err) {
     console.error(`❌ Feed ${type} error:`, err.message);
