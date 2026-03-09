@@ -44,6 +44,11 @@ function nm(str) {
 // FETCH LINKWISE FEED
 // ============================================================
 async function fetchFeed(type) {
+  // For general searches, merge shoes + clothes feeds
+  if (type === 'general') {
+    const [s, c] = await Promise.all([fetchFeed('shoes'), fetchFeed('clothes')]);
+    return [...s, ...c];
+  }
   const now = Date.now();
   if (feedCache[type] && (now - feedCacheTime[type]) < CACHE_TTL) return feedCache[type];
 
@@ -90,11 +95,14 @@ function getFeedTypeForCategory(offersCategory) {
   if (['shoes','baby_shoes'].includes(offersCategory))                        return 'shoes';
   if (['toys','baby_toys'].includes(offersCategory))                          return 'toys';
   if (['clothes','baby_clothes','baby_essentials'].includes(offersCategory))  return 'clothes';
-  // For Home search, detect from category
-  if (offersCategory === 'SHOES')   return 'shoes';
-  if (offersCategory === 'TOYS')    return 'toys';
-  if (offersCategory === 'CLOTHES' || offersCategory === 'SWIMWEAR' || offersCategory === 'BABY') return 'clothes';
-  return null;
+  // Home search categories
+  if (offersCategory === 'SHOES')                                             return 'shoes';
+  if (offersCategory === 'TOYS' || offersCategory === 'SCHOOL')               return 'toys';
+  if (['CLOTHES','SWIMWEAR','BABY','SUMMER'].includes(offersCategory))        return 'clothes';
+  if (offersCategory === 'SPORTS')                                            return 'shoes'; // shoes feed has sports too
+  // GENERAL: load shoes + clothes (most common) — toys separate
+  if (offersCategory === 'GENERAL')                                           return 'general';
+  return 'general';
 }
 
 // ============================================================
@@ -320,8 +328,23 @@ function searchLinkwise(products, offersCategory, gender, age, shoeSize, clothin
     baby_essentials: ['βρεφικ','baby','μωρ','νεογν','πανα'],
   };
 
-  const keywords = categoryKeywords[offersCategory] || [];
-  if (!keywords.length) return [];
+  // Fallback: χρησιμοποίησε το ίδιο το query ως keyword
+  let keywords = categoryKeywords[offersCategory] || [];
+  if (!keywords.length) {
+    // Map HOME categories to keyword lists
+    const homeCatKeywords = {
+      SHOES:    ['παπουτσ','shoes','sneaker','boot','πεδιλ','σανδαλ','μποτ'],
+      CLOTHES:  ['ρουχ','μπλουζ','παντελον','φορεμ','μπουφαν','φορμ','shirt','jeans','dress'],
+      TOYS:     ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','puzzle'],
+      SCHOOL:   ['σχολικ','τσαντ','κασετιν','μολυβ','τετραδ'],
+      SWIMWEAR: ['μαγιο','swimwear','μπικιν','ολοσωμ','swim'],
+      SPORTS:   ['αθλητ','ποδοσφαιρ','μπασκετ','sport'],
+      SUMMER:   ['καλοκαιρ','summer','παραλι','θαλασσ'],
+      BABY:     ['βρεφ','baby','μωρ','νεογν'],
+      GENERAL:  ['παιδ','kid','child','baby','αγορ','κοριτσ'],
+    };
+    keywords = homeCatKeywords[offersCategory] || ['παιδ','kid'];
+  }
 
   return products
     .filter(p => {
