@@ -100,7 +100,7 @@ function calcReminders(profile) {
     const name = child.name || 'Το παιδί σου';
 
     // 🎂 Γενέθλια — 7 και 3 μέρες πριν
-    if (child.birthday) {
+    if (child.birthday && child.notifyBirthday !== false) {
       const bday = new Date(child.birthday);
       const thisYear = new Date(now.getFullYear(), bday.getMonth(), bday.getDate());
       if (thisYear < now) thisYear.setFullYear(now.getFullYear() + 1);
@@ -120,7 +120,7 @@ function calcReminders(profile) {
     }
 
     // 👟 Αλλαγή μεγέθους — κάθε 6 μήνες
-    if (child.lastShoeUpdate) {
+    if (child.lastShoeUpdate && child.notifySize !== false) {
       const last = new Date(child.lastShoeUpdate);
       const monthsAgo = (now - last) / (1000 * 60 * 60 * 24 * 30);
       if (monthsAgo >= 6) reminders.push({
@@ -131,7 +131,7 @@ function calcReminders(profile) {
       });
     }
 
-    if (child.lastClothesUpdate) {
+    if (child.lastClothesUpdate && child.notifySize !== false) {
       const last = new Date(child.lastClothesUpdate);
       const monthsAgo = (now - last) / (1000 * 60 * 60 * 24 * 30);
       if (monthsAgo >= 6) reminders.push({
@@ -143,9 +143,9 @@ function calcReminders(profile) {
     }
 
     // 🏫 Σχολική χρονιά — 1 Αυγούστου
-    const month = now.getMonth(); // 0-indexed
+    const month = now.getMonth();
     const day   = now.getDate();
-    if (month === 7 && day === 1) reminders.push({
+    if (month === 7 && day === 1 && child.notifySchool !== false) reminders.push({
       type: 'school',
       title: `🏫 Σχολείο σε 1 μήνα!`,
       body: `Ετοίμασε τη σχολική λίστα για ${name} — τσάντα, κασετίνα, ρούχα!`,
@@ -153,27 +153,26 @@ function calcReminders(profile) {
     });
 
     // 📅 Εποχιακές υπενθυμίσεις
-    // Ιούνιος: καλοκαιρινά
-    if (month === 5 && day === 1) reminders.push({
-      type: 'seasonal',
-      title: `☀️ Καλοκαίρι! Ετοιμάσου!`,
-      body: `Μαγιό, σανδάλια και καλοκαιρινά ρούχα για ${name}!`,
-      data: { child: name, type: 'seasonal', season: 'summer' }
-    });
-    // Σεπτέμβριος: φθινοπωρινά
-    if (month === 8 && day === 1) reminders.push({
-      type: 'seasonal',
-      title: `🍂 Φθινόπωρο — Ανανέωσε τη γκαρνταρόμπα!`,
-      body: `Ζεστά ρούχα και μπουφάν για ${name} για το φθινόπωρο.`,
-      data: { child: name, type: 'seasonal', season: 'autumn' }
-    });
-    // Δεκέμβριος: Χριστούγεννα
-    if (month === 11 && day === 1) reminders.push({
-      type: 'christmas',
-      title: `🎄 Χριστούγεννα σε 25 μέρες!`,
-      body: `Ψάξε δώρα για ${name} πριν εξαντληθούν τα αποθέματα!`,
-      data: { child: name, type: 'christmas' }
-    });
+    if (child.notifySeasonal !== false) {
+      if (month === 5 && day === 1) reminders.push({
+        type: 'seasonal',
+        title: `☀️ Καλοκαίρι! Ετοιμάσου!`,
+        body: `Μαγιό, σανδάλια και καλοκαιρινά ρούχα για ${name}!`,
+        data: { child: name, type: 'seasonal', season: 'summer' }
+      });
+      if (month === 8 && day === 1) reminders.push({
+        type: 'seasonal',
+        title: `🍂 Φθινόπωρο — Ανανέωσε τη γκαρνταρόμπα!`,
+        body: `Ζεστά ρούχα και μπουφάν για ${name} για το φθινόπωρο.`,
+        data: { child: name, type: 'seasonal', season: 'autumn' }
+      });
+      if (month === 11 && day === 1) reminders.push({
+        type: 'christmas',
+        title: `🎄 Χριστούγεννα σε 25 μέρες!`,
+        body: `Ψάξε δώρα για ${name} πριν εξαντληθούν τα αποθέματα!`,
+        data: { child: name, type: 'christmas' }
+      });
+    }
   }
 
   return reminders;
