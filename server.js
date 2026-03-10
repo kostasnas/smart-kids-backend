@@ -1,9 +1,128 @@
-// server.js - Smart Kids with Linkwise + SerpAPI
+// server.js - Smart Kids with FCM Notifications + Search
 import http from 'http';
 import { URL } from 'url';
+import { readFileSync } from 'fs';
 
 const PORT = process.env.PORT || 3001;
-const SERPAPI_KEY = process.env.SERPAPI_KEY;
+const SERPAPI_KEY    = process.env.SERPAPI_KEY;
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'smat-kids-app';
+
+// ============================================================
+// FIREBASE FCM HTTP v1 — Service Account Auth
+// ============================================================
+let serviceAccount = null;
+try {
+  // Try Secret File first (Render)
+  const raw = readFileSync('/etc/secrets/firebase-service-account.json', 'utf8');
+  serviceAccount = JSON.parse(raw);
+  console.log('✅ Firebase Service Account loaded from Secret File');
+} catch {
+  // Fallback to env var
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+    if (serviceAccount.private_key) console.log('✅ Firebase Service Account loaded from ENV');
+  } catch { console.warn('⚠️ Firebase Service Account not found'); }
+}
+
+// Get FCM access token using JWT (no external deps)
+async function getFCMToken() {
+  if (!serviceAccount?.private_key) throw new Error('No service account');
+  const now = Math.floor(Date.now() / 1000);
+  const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+  })).toString('base64url');
+
+  // Sign with private key using Node.js crypto
+  const { createSign } = await import('crypto');
+  const sign = createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  const sig = sign.sign(serviceAccount.private_key, 'base64url');
+  const jwt = `${header}.${payload}.${sig}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('FCM token failed: ' + JSON.stringify(data));
+  return data.access_token;
+}
+
+// Send FCM notification to a device token
+async function sendFCMNotification(deviceToken, title, body, data = {}) {
+  try {
+    const accessToken = await getFCMToken();
+    const res = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            token: deviceToken,
+            notification: { title, body },
+            data: Object.fromEntries(Object.entries(data).map(([k,v]) => [k, String(v)])),
+            android: { priority: 'high', notification: { sound: 'default', channel_id: 'smart_kids' } },
+          }
+        }),
+      }
+    );
+    const result = await res.json();
+    if (result.name) { console.log('📬 FCM sent:', result.name); return true; }
+    console.warn('⚠️ FCM error:', JSON.stringify(result));
+    return false;
+  } catch (err) {
+    console.error('❌ FCM send error:', err.message);
+    return false;
+  }
+}
+
+// ============================================================
+// REMINDER LOGIC — υπολογισμός ειδοποιήσεων
+// ============================================================
+function calcReminders(profile) {
+  const reminders = [];
+  const now = new Date();
+
+  for (const child of (profile.children || [])) {
+    const name = child.name || 'Το παιδί σου';
+
+    // 🎂 Γενέθλια — 7 και 3 μέρες πριν
+    if (child.birthday) {
+      const bday = new Date(child.birthday);
+      const thisYear = new Date(now.getFullYear(), bday.getMonth(), bday.getDate());
+      if (thisYear < now) thisYear.setFullYear(now.getFullYear() + 1);
+      const daysUntil = Math.round((thisYear - now) / (1000 * 60 * 60 * 24));
+      if (daysUntil === 7)  reminders.push({ type: 'birthday', title: `🎂 Γενέθλια ${name}!`, body: `Σε 7 μέρες τα γενέθλια! Έχεις ετοιμάσει δώρο;`, data: { child: name, type: 'birthday' } });
+      if (daysUntil === 3)  reminders.push({ type: 'birthday', title: `🎂 ${name} — 3 μέρες!`, body: `Τελευταία ευκαιρία για δώρο γενεθλίων!`, data: { child: name, type: 'birthday' } });
+    }
+
+    // 👟 Αλλαγή μεγέθους — κάθε 6 μήνες
+    if (child.lastSizeUpdate) {
+      const last = new Date(child.lastSizeUpdate);
+      const monthsAgo = (now - last) / (1000 * 60 * 60 * 24 * 30);
+      if (monthsAgo >= 6) reminders.push({ type: 'size', title: `👟 Νέο μέγεθος για ${name};`, body: `Πέρασαν 6 μήνες — ίσως χρειάζεται νέο νούμερο ή ρούχα!`, data: { child: name, type: 'size' } });
+    }
+
+    // 🏫 Αρχή σχολικής χρονιάς — Αύγουστος/Σεπτέμβριος
+    const month = now.getMonth(); // 0-indexed
+    if (month === 7 && now.getDate() === 1) { // 1 Αυγούστου
+      reminders.push({ type: 'school', title: `🏫 Σχολείο σε 1 μήνα!`, body: `Ετοίμασε τη σχολική λίστα για ${name}`, data: { child: name, type: 'school' } });
+    }
+  }
+
+  return reminders;
+}
 
 // ============================================================
 // LINKWISE — Feed URLs (φορτώνονται από τον CLIENT, όχι server)
@@ -523,6 +642,66 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ results: [], error: err.message }));
     }
+
+  } else if (pathname === '/api/register-token' && req.method === 'POST') {
+    // Αποθήκευση FCM token χρήστη στη Supabase
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { userId, token, profile } = JSON.parse(body);
+        if (!userId || !token) { res.writeHead(400); res.end('Missing userId or token'); return; }
+
+        const SUPABASE_URL = process.env.SUPABASE_URL;
+        const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+
+        if (SUPABASE_URL && SUPABASE_KEY) {
+          await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Prefer': 'resolution=merge-duplicates',
+            },
+            body: JSON.stringify({ user_id: userId, token, profile, updated_at: new Date().toISOString() }),
+          });
+        }
+
+        // Έλεγξε αν υπάρχουν pending reminders για αυτόν τον χρήστη
+        const reminders = profile ? calcReminders(profile) : [];
+        for (const r of reminders) {
+          await sendFCMNotification(token, r.title, r.body, r.data);
+        }
+
+        console.log(`📱 Token registered for user ${userId}, ${reminders.length} reminders sent`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, reminders: reminders.length }));
+      } catch(err) {
+        console.error('register-token error:', err.message);
+        res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+
+  } else if (pathname === '/api/test-notification' && req.method === 'POST') {
+    // Test endpoint — στέλνει test notification
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { token } = JSON.parse(body);
+        const ok = await sendFCMNotification(
+          token,
+          '🎉 Smart Kids',
+          'Οι ειδοποιήσεις λειτουργούν!',
+          { type: 'test' }
+        );
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok }));
+      } catch(err) {
+        res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+      }
+    });
 
   } else {
     res.writeHead(404); res.end('Not Found');
