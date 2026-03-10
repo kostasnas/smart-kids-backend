@@ -435,7 +435,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed', message: err.message }));
     }
-  } else if (pathname === '/api/feed') {
+  } else if (parsedUrl.pathname === '/api/feed') {
     // Streaming proxy: fetch Linkwise feed, filter server-side, return max 60 products
     const feedType   = parsedUrl.searchParams.get('type') || 'shoes';
     const shoeSize   = parsedUrl.searchParams.get('shoeSize') || '';
