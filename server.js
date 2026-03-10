@@ -43,57 +43,44 @@ function nm(str) {
 // ============================================================
 // FETCH LINKWISE FEED
 // ============================================================
-// Parse a JSON array text and return max N filtered items WITHOUT loading full array
+// Parse feed JSON — parse full array but slice early to limit memory
 function parseFeedLimited(text, maxItems) {
-  const results = [];
-  // Find start of array
-  const start = text.indexOf('[');
-  if (start === -1) return results;
-
-  let depth = 0;
-  let objStart = -1;
-  let inString = false;
-  let escape = false;
-
-  for (let i = start; i < text.length && results.length < maxItems; i++) {
-    const ch = text[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-
-    if (ch === '{') {
-      if (depth === 0) objStart = i;
-      depth++;
-    } else if (ch === '}') {
-      depth--;
-      if (depth === 0 && objStart !== -1) {
-        try {
-          const obj = JSON.parse(text.slice(objStart, i + 1));
-          // Filter inline
-          const stock = (obj.in_stock || '').toString().toLowerCase().trim();
-          if (stock === '0' || stock === 'n' || stock === 'false') { objStart = -1; continue; }
-          if (!obj.price || !obj.product_name) { objStart = -1; continue; }
-          const cat = nm(obj.category || '');
-          if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) { objStart = -1; continue; }
-          if (cat.includes('γυναικ') || cat.includes('women')) { objStart = -1; continue; }
-          results.push({
-            product_name: clean(obj.product_name),
-            category:     clean(obj.category),
-            brand_name:   clean(obj.brand_name),
-            tracking_url: obj.tracking_url,
-            thumb_url:    obj.thumb_url,
-            on_sale:      obj.on_sale,
-            price:        clean(obj.price),
-            discount:     obj.discount,
-            size:         clean(obj.size),
-          });
-        } catch {}
-        objStart = -1;
-      }
+  try {
+    // Truncate text to avoid parsing huge JSON — estimate ~300 chars per item
+    const approxCutoff = maxItems * 350;
+    let sliced = text;
+    if (text.length > approxCutoff) {
+      // Find last complete object before cutoff
+      const cutoff = text.lastIndexOf('},', approxCutoff);
+      if (cutoff > 0) sliced = text.slice(0, cutoff + 1) + ']';
     }
+    const all = JSON.parse(sliced);
+    const results = [];
+    for (const obj of all) {
+      if (results.length >= maxItems) break;
+      const stock = (obj.in_stock || '').toString().toLowerCase().trim();
+      if (stock === '0' || stock === 'n' || stock === 'false') continue;
+      if (!obj.price || !obj.product_name) continue;
+      const cat = nm(obj.category || '');
+      if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) continue;
+      if (cat.includes('γυναικ') || cat.includes('women')) continue;
+      results.push({
+        product_name: clean(obj.product_name),
+        category:     clean(obj.category),
+        brand_name:   clean(obj.brand_name),
+        tracking_url: obj.tracking_url,
+        thumb_url:    obj.thumb_url,
+        on_sale:      obj.on_sale,
+        price:        clean(obj.price),
+        discount:     obj.discount,
+        size:         clean(obj.size),
+      });
+    }
+    return results;
+  } catch (e) {
+    console.error('parseFeedLimited error:', e.message);
+    return [];
   }
-  return results;
 }
 
 async function fetchFeed(type) {
@@ -110,7 +97,8 @@ async function fetchFeed(type) {
 
     // Get text, parse limited — avoids double-memory of JSON.parse on huge array
     const text = await res.text();
-    const MAX_PER_FEED = 2000;
+    console.log(`📥 Feed ${type} raw size: ${Math.round(text.length/1024)}KB`);
+    const MAX_PER_FEED = 1500;
     feedCache[type] = parseFeedLimited(text, MAX_PER_FEED);
 
     feedCacheTime[type] = now;
@@ -391,18 +379,18 @@ function searchLinkwise(products, offersCategory, gender, age, shoeSize, clothin
       // Πρέπει να ταιριάζει με κάποιο keyword της κατηγορίας
       if (!keywords.some(kw => combined.includes(kw))) return false;
 
-      // Φίλτρο νούμερου παπουτσιού
-      if (shoeSize && p.size) {
-        const sizes      = nm(p.size).split(',').map(x => x.trim());
+      // Φίλτρο νούμερου παπουτσιού — soft filter (δεν αποκλείει αν δεν έχει size)
+      if (shoeSize && p.size && p.size.trim()) {
+        const sizes      = nm(p.size).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
         const targetSize = parseInt(shoeSize);
         const sizeMatch  = [targetSize-1, targetSize, targetSize+1].some(s => sizes.includes(String(s)));
         if (!sizeMatch) return false;
       }
 
-      // Φίλτρο μεγέθους ρούχου
-      if (clothingSize && p.size && !shoeSize) {
-        const sizes = nm(p.size).split(',').map(x => x.trim());
-        if (!sizes.includes(nm(clothingSize))) return false;
+      // Φίλτρο μεγέθους ρούχου — soft filter
+      if (clothingSize && p.size && p.size.trim() && !shoeSize) {
+        const sizes = nm(p.size).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
+        if (sizes.length > 0 && !sizes.some(s => s.includes(nm(clothingSize)))) return false;
       }
 
       return true;
