@@ -372,29 +372,29 @@ function searchLinkwise(products, offersCategory, gender, age, shoeSize, clothin
 
   return products
     .filter(p => {
-      const stock = nm(p.in_stock);
-      if (stock === '0' || stock === 'n' || stock === 'false') return false;
-
-      const title    = nm(p.product_name);
-      const cat      = nm(p.category);
-      const brand    = nm(p.brand_name);
+      const title    = nm(p.product_name || '');
+      const cat      = nm(p.category || '');
+      const brand    = nm(p.brand_name || '');
       const combined = `${title} ${cat} ${brand}`;
 
-      // Πρέπει να ταιριάζει με κάποιο keyword της κατηγορίας
-      if (!keywords.some(kw => combined.includes(kw))) return false;
-
-      // Φίλτρο νούμερου παπουτσιού — soft filter (δεν αποκλείει αν δεν έχει size)
-      if (shoeSize && p.size && p.size.trim()) {
-        const sizes      = nm(p.size).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
-        const targetSize = parseInt(shoeSize);
-        const sizeMatch  = [targetSize-1, targetSize, targetSize+1].some(s => sizes.includes(String(s)));
-        if (!sizeMatch) return false;
+      // Αν δεν έχουμε keywords, επέστρεψε όλα
+      if (keywords.length > 0) {
+        if (!keywords.some(kw => combined.includes(kw))) return false;
       }
 
-      // Φίλτρο μεγέθους ρούχου — soft filter
-      if (clothingSize && p.size && p.size.trim() && !shoeSize) {
-        const sizes = nm(p.size).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
-        if (sizes.length > 0 && !sizes.some(s => s.includes(nm(clothingSize)))) return false;
+      // Size filtering — only if product explicitly has size field
+      // Shoes
+      if (shoeSize && p.size && p.size.trim().length > 0) {
+        const sizes = p.size.split(/[,;\s]+/).map(x => x.trim()).filter(x => /^\d+$/.test(x));
+        if (sizes.length > 0) {
+          const t = parseInt(shoeSize);
+          if (![t-1,t,t+1].some(s => sizes.includes(String(s)))) return false;
+        }
+      }
+      // Clothes
+      if (clothingSize && !shoeSize && p.size && p.size.trim().length > 0) {
+        const sizes = p.size.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+        if (sizes.length > 0 && !sizes.some(s => s === clothingSize)) return false;
       }
 
       return true;
@@ -545,9 +545,14 @@ const server = http.createServer(async (req, res) => {
       const feedType = getFeedTypeForCategory(effectiveCategory);
       if (feedType) {
         const feedProducts = await fetchFeed(feedType);
+        console.log(`🗂️ Feed products loaded: ${feedProducts.length}, effectiveCategory: ${effectiveCategory}`);
+        if (feedProducts.length > 0) {
+          const sample = feedProducts[0];
+          console.log(`📝 Sample: name="${sample.product_name}" cat="${sample.category}" size="${sample.size}"`);
+        }
         linkwiseResults = searchLinkwise(feedProducts, effectiveCategory, gender, age, shoeSize, clothingSize)
           .map(p => ({ ...p, attributes: extractAttributes(p, category), category: effectiveCategory }));
-        console.log(`📦 Linkwise [${feedType}]: ${linkwiseResults.length}`);
+        console.log(`📦 Linkwise [${feedType}]: ${linkwiseResults.length} results`);
       }
 
       // ── SERPAPI: πάντα (supplement για linkwise ή primary για sports/bikes/tech κτλ) ──
