@@ -435,6 +435,95 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed', message: err.message }));
     }
+  } else if (pathname === '/api/feed') {
+    // Streaming proxy: fetch Linkwise feed, filter server-side, return max 60 products
+    const feedType   = parsedUrl.searchParams.get('type') || 'shoes';
+    const shoeSize   = parsedUrl.searchParams.get('shoeSize') || '';
+    const clothingSize = parsedUrl.searchParams.get('clothingSize') || '';
+    const gender     = parsedUrl.searchParams.get('gender') || '';
+    const age        = parseFloat(parsedUrl.searchParams.get('age') || '5');
+
+    const feedUrl = LW_FEED_URLS[feedType];
+    if (!feedUrl) { res.writeHead(400); res.end('Unknown feed type'); return; }
+
+    try {
+      const ctrl   = new AbortController();
+      const timer  = setTimeout(() => ctrl.abort(), 25000);
+      const lwRes  = await fetch(feedUrl, { signal: ctrl.signal });
+      clearTimeout(timer);
+
+      if (!lwRes.ok) throw new Error(`Feed HTTP ${lwRes.status}`);
+
+      // Read chunks, stop after 8MB
+      const MAX_BYTES = 8 * 1024 * 1024;
+      let received = 0;
+      const chunks = [];
+      const reader = lwRes.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (received >= MAX_BYTES) { reader.cancel(); break; }
+      }
+
+      // Decode and fix truncated JSON
+      let text = new TextDecoder().decode(Buffer.concat(chunks.map(c => Buffer.from(c))));
+      if (!text.trimEnd().endsWith(']')) {
+        const cut = text.lastIndexOf('},');
+        if (cut > 0) text = text.slice(0, cut + 1) + ']';
+      }
+
+      const all = JSON.parse(text);
+      const genderGr = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
+      const oppGr    = gender === 'Αγόρι' ? 'κοριτσι' : 'αγορι';
+      const tShoe    = parseInt(shoeSize) || 0;
+      const results  = [];
+
+      for (const p of all) {
+        if (results.length >= 60) break;
+        if (!p.product_name || !p.price) continue;
+        const stock = (p.in_stock || '').toString().toLowerCase();
+        if (stock === '0' || stock === 'n' || stock === 'false') continue;
+        const title = nm(p.product_name);
+        const cat   = nm(p.category || '');
+        if (cat.includes('ανδρ') || cat.includes('γυναικ') || cat.includes('women')) continue;
+        if (title.includes(oppGr) || cat.includes(oppGr)) continue;
+        // Size filter
+        if (tShoe && p.size && p.size.trim()) {
+          const sizes = p.size.split(/[,;\s]+/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x));
+          if (sizes.length > 0 && ![tShoe-1,tShoe,tShoe+1].some(s=>sizes.includes(String(s)))) continue;
+        }
+        if (clothingSize && !tShoe && p.size && p.size.trim()) {
+          const sizes = p.size.split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
+          if (sizes.length > 0 && !sizes.some(s=>s===clothingSize)) continue;
+        }
+        const price = parseFloat((p.price||'0').replace(',','.').replace(/[^0-9.]/g,'')) || 0;
+        results.push({
+          product_id:  'lw_' + Math.random().toString(36).substr(2,8),
+          title:       p.product_name,
+          price:       price ? price.toFixed(2)+'€' : p.price,
+          priceValue:  price,
+          thumbnail:   p.thumb_url || null,
+          buyLink:     p.tracking_url,
+          source:      (() => { try { return new URL(decodeURIComponent((p.tracking_url||'').split('lnkurl=')[1]||p.tracking_url)).hostname.replace('www.',''); } catch { return 'Κατάστημα'; } })(),
+          isAffiliate: true,
+          genderScore: title.includes(genderGr) ? 80 : 0,
+          finalScore:  price ? Math.max(0, 100 - price/2) : 50,
+          attributes:  {},
+        });
+      }
+
+      console.log(`✅ Feed proxy [${feedType}]: ${results.length}/${all.length} products (${Math.round(received/1024)}KB read)`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ results }));
+
+    } catch(err) {
+      console.error('Feed proxy error:', err.message);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ results: [], error: err.message }));
+    }
+
   } else {
     res.writeHead(404); res.end('Not Found');
   }
