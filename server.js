@@ -11,14 +11,13 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY;
 const LW_BASE = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0';
 
 // Split into 3 feeds to stay within 512MB RAM limit
+// 1 κατάστημα ανά feed — ελάχιστη μνήμη
 const LW_FEEDS = {
-  // Παπούτσια — 3 καταστήματα μόνο
-  shoes:   `${LW_BASE}/proginc-469-2142,469-301,385-251/progex-0/feed.json`,
-  // Παιχνίδια — 3 καταστήματα
-  toys:    `${LW_BASE}/proginc-10784-281,11307-622,13208-2081/progex-0/feed.json`,
-  // Ρούχα — 3 καταστήματα
-  clothes: `${LW_BASE}/proginc-11562-711,14015-2746,11036-369/progex-0/feed.json`,
+  shoes:   `${LW_BASE}/proginc-469-2142/progex-0/feed.json`,
+  toys:    `${LW_BASE}/proginc-10784-281/progex-0/feed.json`,
+  clothes: `${LW_BASE}/proginc-11562-711/progex-0/feed.json`,
 };
+const MAX_RAW_BYTES = 6 * 1024 * 1024; // 6MB max raw text
 
 // Ποιες κατηγορίες χρησιμοποιούν ΜΟΝΟ SerpAPI (δεν υπάρχουν στο Linkwise)
 const SERP_ONLY_CATEGORIES = ['sports', 'bikes', 'tech', 'gaming', 'school_bags', 'school_supplies', 'baby_gear', 'baby_safety'];
@@ -96,9 +95,14 @@ async function fetchFeed(type) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     // Get text, parse limited — avoids double-memory of JSON.parse on huge array
-    const text = await res.text();
-    console.log(`📥 Feed ${type} raw size: ${Math.round(text.length/1024)}KB`);
-    const MAX_PER_FEED = 1500;
+    // Read as buffer, hard-limit to 6MB to prevent OOM
+    const buf = await res.arrayBuffer();
+    const rawSize = buf.byteLength;
+    console.log(`📥 Feed ${type} raw: ${Math.round(rawSize/1024)}KB`);
+    const text = new TextDecoder().decode(
+      rawSize > MAX_RAW_BYTES ? buf.slice(0, MAX_RAW_BYTES) : buf
+    );
+    const MAX_PER_FEED = 1200;
     feedCache[type] = parseFeedLimited(text, MAX_PER_FEED);
 
     feedCacheTime[type] = now;
