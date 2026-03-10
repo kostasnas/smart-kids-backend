@@ -12,12 +12,12 @@ const LW_BASE = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/c
 
 // Split into 3 feeds to stay within 512MB RAM limit
 const LW_FEEDS = {
-  // Παπούτσια
-  shoes: `${LW_BASE}/proginc-13255-2053,13884-2555,385-251,469-2142,469-2139,469-2136,469-301,469-300,469-299/progex-0/feed.json`,
-  // Παιχνίδια + Σχολικά
-  toys:  `${LW_BASE}/proginc-10784-281,11307-622,13208-2081,13506-2267,10632-237,12323-1271,12761-1652/progex-0/feed.json`,
-  // Ρούχα + Βρεφικά
-  clothes: `${LW_BASE}/proginc-11562-711,14015-2746,11036-369,13712-2432,11754-880,11764-1059,13604-2421,138-2273,12174-1176,14123-2770,13199-1967,12345-1289/progex-0/feed.json`,
+  // Παπούτσια — 3 καταστήματα μόνο
+  shoes:   `${LW_BASE}/proginc-469-2142,469-301,385-251/progex-0/feed.json`,
+  // Παιχνίδια — 3 καταστήματα
+  toys:    `${LW_BASE}/proginc-10784-281,11307-622,13208-2081/progex-0/feed.json`,
+  // Ρούχα — 3 καταστήματα
+  clothes: `${LW_BASE}/proginc-11562-711,14015-2746,11036-369/progex-0/feed.json`,
 };
 
 // Ποιες κατηγορίες χρησιμοποιούν ΜΟΝΟ SerpAPI (δεν υπάρχουν στο Linkwise)
