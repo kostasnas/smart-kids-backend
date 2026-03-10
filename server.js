@@ -6,25 +6,20 @@ const PORT = process.env.PORT || 3001;
 const SERPAPI_KEY = process.env.SERPAPI_KEY;
 
 // ============================================================
-// LINKWISE FEEDS ΑΝΑ ΚΑΤΗΓΟΡΙΑ
+// LINKWISE — Feed URLs (φορτώνονται από τον CLIENT, όχι server)
 // ============================================================
 const LW_BASE = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0';
 
-// Split into 3 feeds to stay within 512MB RAM limit
-// 1 κατάστημα ανά feed — ελάχιστη μνήμη
-const LW_FEEDS = {
-  shoes:   `${LW_BASE}/proginc-469-2142/progex-0/feed.json`,
-  toys:    `${LW_BASE}/proginc-10784-281/progex-0/feed.json`,
-  clothes: `${LW_BASE}/proginc-11562-711/progex-0/feed.json`,
+const LW_FEED_URLS = {
+  shoes:   `${LW_BASE}/proginc-385-251/progex-0/feed.json`,   // Sneaker10
+  toys:    `${LW_BASE}/proginc-11307-622/progex-0/feed.json`, // Παιχνίδια
+  clothes: `${LW_BASE}/proginc-14015-2746/progex-0/feed.json`, // Παιδικά ρούχα
 };
-const MAX_RAW_BYTES = 6 * 1024 * 1024; // 6MB max raw text
 
 // Ποιες κατηγορίες χρησιμοποιούν ΜΟΝΟ SerpAPI (δεν υπάρχουν στο Linkwise)
 const SERP_ONLY_CATEGORIES = ['sports', 'bikes', 'tech', 'gaming', 'school_bags', 'school_supplies', 'baby_gear', 'baby_safety'];
 
-const feedCache = { shoes: null, clothes: null, toys: null };
-const feedCacheTime = { shoes: 0, clothes: 0, toys: 0 };
-const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — shorter to free RAM
+// No server-side feed cache — feeds processed by client
 
 // ============================================================
 // HELPERS
@@ -42,79 +37,7 @@ function nm(str) {
 // ============================================================
 // FETCH LINKWISE FEED
 // ============================================================
-// Parse feed JSON — parse full array but slice early to limit memory
-function parseFeedLimited(text, maxItems) {
-  try {
-    // Truncate text to avoid parsing huge JSON — estimate ~300 chars per item
-    const approxCutoff = maxItems * 350;
-    let sliced = text;
-    if (text.length > approxCutoff) {
-      // Find last complete object before cutoff
-      const cutoff = text.lastIndexOf('},', approxCutoff);
-      if (cutoff > 0) sliced = text.slice(0, cutoff + 1) + ']';
-    }
-    const all = JSON.parse(sliced);
-    const results = [];
-    for (const obj of all) {
-      if (results.length >= maxItems) break;
-      const stock = (obj.in_stock || '').toString().toLowerCase().trim();
-      if (stock === '0' || stock === 'n' || stock === 'false') continue;
-      if (!obj.price || !obj.product_name) continue;
-      const cat = nm(obj.category || '');
-      if (cat.includes('ανδρ') || cat.includes('men ') || cat.includes('/men')) continue;
-      if (cat.includes('γυναικ') || cat.includes('women')) continue;
-      results.push({
-        product_name: clean(obj.product_name),
-        category:     clean(obj.category),
-        brand_name:   clean(obj.brand_name),
-        tracking_url: obj.tracking_url,
-        thumb_url:    obj.thumb_url,
-        on_sale:      obj.on_sale,
-        price:        clean(obj.price),
-        discount:     obj.discount,
-        size:         clean(obj.size),
-      });
-    }
-    return results;
-  } catch (e) {
-    console.error('parseFeedLimited error:', e.message);
-    return [];
-  }
-}
 
-async function fetchFeed(type) {
-  // For general: only load shoes (most common searches)
-  if (type === 'general') return fetchFeed('shoes');
-
-  const now = Date.now();
-  if (feedCache[type] && (now - feedCacheTime[type]) < CACHE_TTL) return feedCache[type];
-
-  try {
-    console.log(`🔄 Fetching feed: ${type}`);
-    const res = await fetch(LW_FEEDS[type]);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    // Get text, parse limited — avoids double-memory of JSON.parse on huge array
-    // Read as buffer, hard-limit to 6MB to prevent OOM
-    const buf = await res.arrayBuffer();
-    const rawSize = buf.byteLength;
-    console.log(`📥 Feed ${type} raw: ${Math.round(rawSize/1024)}KB`);
-    const text = new TextDecoder().decode(
-      rawSize > MAX_RAW_BYTES ? buf.slice(0, MAX_RAW_BYTES) : buf
-    );
-    const MAX_PER_FEED = 1200;
-    feedCache[type] = parseFeedLimited(text, MAX_PER_FEED);
-
-    feedCacheTime[type] = now;
-    console.log(`✅ Feed ${type}: ${feedCache[type].length} products kept`);
-    return feedCache[type];
-  } catch (err) {
-    console.error(`❌ Feed ${type} error:`, err.message);
-    return feedCache[type] || [];
-  }
-}
-
-// Επιλογή feed ανά κατηγορία offers
 function getFeedTypeForCategory(offersCategory) {
   if (['shoes','baby_shoes'].includes(offersCategory))                        return 'shoes';
   if (['toys','baby_toys'].includes(offersCategory))                          return 'toys';
@@ -337,103 +260,6 @@ function isAgeRelevant(title, age) {
 // ============================================================
 // SEARCH LINKWISE
 // ============================================================
-function searchLinkwise(products, offersCategory, gender, age, shoeSize, clothingSize) {
-  const genderGr = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
-  const oppGr    = gender === 'Αγόρι' ? 'κοριτσι' : 'αγορι';
-
-  // Keywords ανά κατηγορία — τι να ψάξουμε στο feed
-  const categoryKeywords = {
-    shoes:           ['παπουτσ','shoes','sneaker','boot','sandal','πεδιλ','σανδαλ','μποτ','μπαλαρ'],
-    baby_shoes:      ['παπουτσ','shoes','sneaker','boot','βρεφ','baby'],
-    toys:            ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','game','figure','puzzle','δωρ'],
-    baby_toys:       ['παιχνιδ','toy','βρεφ','baby','μωρ','εκπαιδευτ'],
-    clothes:         ['ρουχ','μπλουζ','παντελον','φορεμ','ζακετ','μπουφαν','φορμ','κολαν','shirt','jeans','dress'],
-    baby_clothes:    ['ρουχ','βρεφικ','baby','μωρ','νεογν'],
-    baby_essentials: ['βρεφικ','baby','μωρ','νεογν','πανα'],
-  };
-
-  // Fallback: χρησιμοποίησε το ίδιο το query ως keyword
-  let keywords = categoryKeywords[offersCategory] || [];
-  if (!keywords.length) {
-    // Map HOME categories to keyword lists
-    const homeCatKeywords = {
-      SHOES:    ['παπουτσ','shoes','sneaker','boot','πεδιλ','σανδαλ','μποτ'],
-      CLOTHES:  ['ρουχ','μπλουζ','παντελον','φορεμ','μπουφαν','φορμ','shirt','jeans','dress'],
-      TOYS:     ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','puzzle'],
-      SCHOOL:   ['σχολικ','τσαντ','κασετιν','μολυβ','τετραδ'],
-      SWIMWEAR: ['μαγιο','swimwear','μπικιν','ολοσωμ','swim'],
-      SPORTS:   ['αθλητ','ποδοσφαιρ','μπασκετ','sport'],
-      SUMMER:   ['καλοκαιρ','summer','παραλι','θαλασσ'],
-      BABY:     ['βρεφ','baby','μωρ','νεογν'],
-      GENERAL:  ['παιδ','kid','child','baby','αγορ','κοριτσ'],
-    };
-    keywords = homeCatKeywords[offersCategory] || ['παιδ','kid'];
-  }
-
-  return products
-    .filter(p => {
-      const title    = nm(p.product_name || '');
-      const cat      = nm(p.category || '');
-      const brand    = nm(p.brand_name || '');
-      const combined = `${title} ${cat} ${brand}`;
-
-      // Αν δεν έχουμε keywords, επέστρεψε όλα
-      if (keywords.length > 0) {
-        if (!keywords.some(kw => combined.includes(kw))) return false;
-      }
-
-      // Size filtering — only if product explicitly has size field
-      // Shoes
-      if (shoeSize && p.size && p.size.trim().length > 0) {
-        const sizes = p.size.split(/[,;\s]+/).map(x => x.trim()).filter(x => /^\d+$/.test(x));
-        if (sizes.length > 0) {
-          const t = parseInt(shoeSize);
-          if (![t-1,t,t+1].some(s => sizes.includes(String(s)))) return false;
-        }
-      }
-      // Clothes
-      if (clothingSize && !shoeSize && p.size && p.size.trim().length > 0) {
-        const sizes = p.size.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
-        if (sizes.length > 0 && !sizes.some(s => s === clothingSize)) return false;
-      }
-
-      return true;
-    })
-    .map(p => {
-      const priceValue = parseFloat((p.price||'0').replace(',','.').replace('€','').trim()) || 0;
-      const title      = nm(p.product_name);
-      const catNm      = nm(p.category);
-
-      let genderScore = 0;
-      if (title.includes(genderGr) || catNm.includes(genderGr)) genderScore = 80;
-      if (title.includes(oppGr)    || catNm.includes(oppGr))    genderScore = -150;
-
-      if (!isAgeRelevant(p.product_name, age)) return null;
-
-      const priceScore = priceValue ? Math.max(0, 100 - priceValue/2) : 50;
-
-      return {
-        product_id:  `lw_${Math.random().toString(36).substr(2,9)}`,
-        title:       p.product_name,
-        price:       priceValue ? `${priceValue.toFixed(2)}€` : 'N/A',
-        priceValue,
-        source:      extractStoreName(p.tracking_url || ''),
-        thumbnail:   p.thumb_url || null,
-        link:        p.tracking_url,
-        buyLink:     p.tracking_url,
-        rating:      null,
-        reviews:     0,
-        brand:       p.brand_name || null,
-        isAffiliate: true,
-        genderScore,
-        finalScore:  Math.round(priceScore*0.5 + 50*0.4 + genderScore*0.1),
-        source_type: 'linkwise',
-        attributes:  {},
-      };
-    })
-    .filter(Boolean);
-}
-
 function extractStoreName(url) {
   try {
     const decoded = decodeURIComponent(url.split('lnkurl=')[1] || url);
@@ -515,7 +341,7 @@ const server = http.createServer(async (req, res) => {
 
   if (parsedUrl.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status:'ok', cache: Object.fromEntries(Object.keys(feedCache).map(k => [k, feedCache[k]?.length || 0])) }));
+    res.end(JSON.stringify({ status:'ok', feeds: Object.keys(LW_FEED_URLS) }));
     return;
   }
 
@@ -541,19 +367,9 @@ const server = http.createServer(async (req, res) => {
       let linkwiseResults = [];
       let serpResults     = [];
 
-      // ── LINKWISE: μόνο για κατηγορίες που υπάρχουν στα feeds ──
+      // Linkwise feed URL — client will fetch & filter directly
       const feedType = getFeedTypeForCategory(effectiveCategory);
-      if (feedType) {
-        const feedProducts = await fetchFeed(feedType);
-        console.log(`🗂️ Feed products loaded: ${feedProducts.length}, effectiveCategory: ${effectiveCategory}`);
-        if (feedProducts.length > 0) {
-          const sample = feedProducts[0];
-          console.log(`📝 Sample: name="${sample.product_name}" cat="${sample.category}" size="${sample.size}"`);
-        }
-        linkwiseResults = searchLinkwise(feedProducts, effectiveCategory, gender, age, shoeSize, clothingSize)
-          .map(p => ({ ...p, attributes: extractAttributes(p, category), category: effectiveCategory }));
-        console.log(`📦 Linkwise [${feedType}]: ${linkwiseResults.length} results`);
-      }
+      const feedUrl  = feedType ? LW_FEED_URLS[feedType] : null;
 
       // ── SERPAPI: πάντα (supplement για linkwise ή primary για sports/bikes/tech κτλ) ──
       const genderGr = gender === 'Αγόρι' ? 'αγόρι' : 'κορίτσι';
@@ -591,7 +407,7 @@ const server = http.createServer(async (req, res) => {
       // ── MERGE: Linkwise πρώτα, μετά SerpAPI ──
       const seen   = new Set();
       const merged = [];
-      for (const p of [...linkwiseResults, ...serpResults]) {
+      for (const p of [...serpResults]) {
         const key = nm(p.title || '').substring(0, 30);
         if (!seen.has(key)) { seen.add(key); merged.push(p); }
       }
@@ -606,12 +422,12 @@ const server = http.createServer(async (req, res) => {
       if (category === 'SHOES')   availableFilters.suggestedSize = shoeSize     ? [shoeSize]     : getShoeSize(age);
       if (category === 'CLOTHES') availableFilters.suggestedSize = clothingSize ? [clothingSize] : getClothingSize(age);
 
-      console.log(`✅ Total: ${merged.length} (lw:${linkwiseResults.length} + serp:${serpResults.length})`);
+      console.log(`✅ Total: ${merged.length} (serp:${serpResults.length})`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         shopping_results: merged,
-        metadata: { total: merged.length, affiliateCount: linkwiseResults.length, serpCount: serpResults.length, category, categoryLabel: catLabel, availableFilters, sizeSource: shoeSize||clothingSize ? 'profile':'age' }
+        metadata: { total: merged.length, serpCount: serpResults.length, category, categoryLabel: catLabel, availableFilters, sizeSource: shoeSize||clothingSize ? 'profile':'age', feedUrl, feedType, gender, age, shoeSize, clothingSize }
       }));
 
     } catch (err) {
@@ -630,20 +446,4 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`${'='.repeat(50)}\n`);
   // Load feeds on-demand to save RAM — no preload at startup
 
-  // Periodic cache eviction every 30min to free memory
-  setInterval(() => {
-    const now = Date.now();
-    let freed = 0;
-    for (const type of ['shoes','clothes','toys']) {
-      if (feedCache[type] && (now - feedCacheTime[type]) > 30 * 60 * 1000) {
-        feedCache[type] = null;
-        feedCacheTime[type] = 0;
-        freed++;
-      }
-    }
-    if (freed > 0) {
-      console.log(`🧹 Evicted ${freed} feed cache(s) to free memory`);
-      if (global.gc) global.gc();
-    }
-  }, 30 * 60 * 1000);
 });
