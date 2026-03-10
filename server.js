@@ -52,6 +52,7 @@ async function getFCMToken() {
   });
   const data = await res.json();
   if (!data.access_token) throw new Error('FCM token failed: ' + JSON.stringify(data));
+  console.log('🔑 FCM access token obtained (first 20):', data.access_token.substr(0, 20));
   return data.access_token;
 }
 
@@ -78,6 +79,8 @@ async function sendFCMNotification(deviceToken, title, body, data = {}) {
       }
     );
     const result = await res.json();
+    console.log('🔍 FCM response status:', res.status);
+    console.log('🔍 FCM result:', JSON.stringify(result));
     if (result.name) { console.log('📬 FCM sent:', result.name); return true; }
     console.warn('⚠️ FCM error:', JSON.stringify(result));
     return false;
