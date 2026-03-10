@@ -643,7 +643,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ results: [], error: err.message }));
     }
 
-  } else if (pathname === '/api/register-token' && req.method === 'POST') {
+  } else if (parsedUrl.pathname === '/api/register-token' && req.method === 'POST') {
     // Αποθήκευση FCM token χρήστη στη Supabase
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -683,7 +683,7 @@ const server = http.createServer(async (req, res) => {
       }
     });
 
-  } else if (pathname === '/api/test-notification' && req.method === 'POST') {
+  } else if (parsedUrl.pathname === '/api/test-notification' && req.method === 'POST') {
     // Test endpoint — στέλνει test notification
     let body = '';
     req.on('data', chunk => body += chunk);
