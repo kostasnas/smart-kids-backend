@@ -57,7 +57,7 @@ async function getFCMToken() {
   if (!data.access_token) throw new Error('FCM token failed: ' + JSON.stringify(data));
 
   _fcmTokenCache  = data.access_token;
-  _fcmTokenExpiry = now + 3500; // cache ~58 minutes
+  _fcmTokenExpiry = now + 3500;
   return _fcmTokenCache;
 }
 
@@ -99,136 +99,128 @@ function calcReminders(profile) {
   for (const child of (profile.children || [])) {
     const name = child.name || 'Το παιδί σου';
 
-    // 🎂 Γενέθλια — 7 και 3 μέρες πριν
     if (child.birthday && child.notifyBirthday !== false) {
       const bday = new Date(child.birthday);
       const thisYear = new Date(now.getFullYear(), bday.getMonth(), bday.getDate());
       if (thisYear < now) thisYear.setFullYear(now.getFullYear() + 1);
       const daysUntil = Math.round((thisYear - now) / (1000 * 60 * 60 * 24));
-      if (daysUntil === 7) reminders.push({
-        type: 'birthday',
-        title: `🎂 Γενέθλια ${name} σε 7 μέρες!`,
-        body: 'Έχεις ετοιμάσει δώρο; Δες ιδέες στο Smart Kids!',
-        data: { child: name, type: 'birthday', daysUntil: '7' }
-      });
-      if (daysUntil === 3) reminders.push({
-        type: 'birthday',
-        title: `🎂 ${name} — 3 μέρες για γενέθλια!`,
-        body: 'Τελευταία ευκαιρία για δώρο γενεθλίων! 🎁',
-        data: { child: name, type: 'birthday', daysUntil: '3' }
-      });
+      if (daysUntil === 7) reminders.push({ type:'birthday', title:`🎂 Γενέθλια ${name} σε 7 μέρες!`, body:'Έχεις ετοιμάσει δώρο; Δες ιδέες στο Smart Kids!', data:{ child:name, type:'birthday', daysUntil:'7' } });
+      if (daysUntil === 3) reminders.push({ type:'birthday', title:`🎂 ${name} — 3 μέρες για γενέθλια!`, body:'Τελευταία ευκαιρία για δώρο γενεθλίων! 🎁', data:{ child:name, type:'birthday', daysUntil:'3' } });
     }
 
-    // 👟 Αλλαγή μεγέθους — κάθε 6 μήνες
     if (child.lastShoeUpdate && child.notifySize !== false) {
-      const last = new Date(child.lastShoeUpdate);
-      const monthsAgo = (now - last) / (1000 * 60 * 60 * 24 * 30);
-      if (monthsAgo >= 6) reminders.push({
-        type: 'size',
-        title: `👟 ${name} — Ώρα για νέο νούμερο;`,
-        body: `Πέρασαν 6 μήνες από την τελευταία αγορά παπουτσιών. Έλεγξε το μέγεθος!`,
-        data: { child: name, type: 'size', category: 'shoes' }
-      });
+      const monthsAgo = (now - new Date(child.lastShoeUpdate)) / (1000 * 60 * 60 * 24 * 30);
+      if (monthsAgo >= 6) reminders.push({ type:'size', title:`👟 ${name} — Ώρα για νέο νούμερο;`, body:`Πέρασαν 6 μήνες από την τελευταία αγορά παπουτσιών.`, data:{ child:name, type:'size', category:'shoes' } });
     }
 
     if (child.lastClothesUpdate && child.notifySize !== false) {
-      const last = new Date(child.lastClothesUpdate);
-      const monthsAgo = (now - last) / (1000 * 60 * 60 * 24 * 30);
-      if (monthsAgo >= 6) reminders.push({
-        type: 'size',
-        title: `👕 ${name} — Νέα ρούχα;`,
-        body: `Πέρασαν 6 μήνες από τα τελευταία ρούχα. Το παιδί μεγαλώνει γρήγορα!`,
-        data: { child: name, type: 'size', category: 'clothes' }
-      });
+      const monthsAgo = (now - new Date(child.lastClothesUpdate)) / (1000 * 60 * 60 * 24 * 30);
+      if (monthsAgo >= 6) reminders.push({ type:'size', title:`👕 ${name} — Νέα ρούχα;`, body:`Πέρασαν 6 μήνες από τα τελευταία ρούχα.`, data:{ child:name, type:'size', category:'clothes' } });
     }
 
-    // 🏫 Σχολική χρονιά — 1 Αυγούστου
     const month = now.getMonth();
     const day   = now.getDate();
-    if (month === 7 && day === 1 && child.notifySchool !== false) reminders.push({
-      type: 'school',
-      title: `🏫 Σχολείο σε 1 μήνα!`,
-      body: `Ετοίμασε τη σχολική λίστα για ${name} — τσάντα, κασετίνα, ρούχα!`,
-      data: { child: name, type: 'school' }
-    });
+    if (month === 7 && day === 1 && child.notifySchool !== false) reminders.push({ type:'school', title:`🏫 Σχολείο σε 1 μήνα!`, body:`Ετοίμασε τη σχολική λίστα για ${name}!`, data:{ child:name, type:'school' } });
 
-    // 📅 Εποχιακές υπενθυμίσεις
     if (child.notifySeasonal !== false) {
-      if (month === 5 && day === 1) reminders.push({
-        type: 'seasonal',
-        title: `☀️ Καλοκαίρι! Ετοιμάσου!`,
-        body: `Μαγιό, σανδάλια και καλοκαιρινά ρούχα για ${name}!`,
-        data: { child: name, type: 'seasonal', season: 'summer' }
-      });
-      if (month === 8 && day === 1) reminders.push({
-        type: 'seasonal',
-        title: `🍂 Φθινόπωρο — Ανανέωσε τη γκαρνταρόμπα!`,
-        body: `Ζεστά ρούχα και μπουφάν για ${name} για το φθινόπωρο.`,
-        data: { child: name, type: 'seasonal', season: 'autumn' }
-      });
-      if (month === 11 && day === 1) reminders.push({
-        type: 'christmas',
-        title: `🎄 Χριστούγεννα σε 25 μέρες!`,
-        body: `Ψάξε δώρα για ${name} πριν εξαντληθούν τα αποθέματα!`,
-        data: { child: name, type: 'christmas' }
-      });
+      if (month === 5 && day === 1) reminders.push({ type:'seasonal', title:`☀️ Καλοκαίρι! Ετοιμάσου!`, body:`Μαγιό, σανδάλια και καλοκαιρινά ρούχα για ${name}!`, data:{ child:name, type:'seasonal', season:'summer' } });
+      if (month === 8 && day === 1) reminders.push({ type:'seasonal', title:`🍂 Φθινόπωρο — Ανανέωσε τη γκαρνταρόμπα!`, body:`Ζεστά ρούχα και μπουφάν για ${name}.`, data:{ child:name, type:'seasonal', season:'autumn' } });
+      if (month === 11 && day === 1) reminders.push({ type:'christmas', title:`🎄 Χριστούγεννα σε 25 μέρες!`, body:`Ψάξε δώρα για ${name} πριν εξαντληθούν τα αποθέματα!`, data:{ child:name, type:'christmas' } });
     }
   }
-
   return reminders;
 }
 
 // ============================================================
-// DAILY REMINDER ENGINE — τρέχει κάθε 24 ώρες
+// WELCOME SUGGESTIONS — στέλνει 2 notifications αμέσως
+// μετά προσθήκη παιδιού, με top προϊόντα από SerpAPI
+// ============================================================
+async function sendWelcomeSuggestions(deviceToken, kid) {
+  const name   = kid.name   || 'παιδί σου';
+  const gender = kid.gender === 'Αγόρι' ? 'αγόρι' : 'κορίτσι';
+  const age    = kid.age    || 5;
+  const shoe   = kid.shoeSize || kid.shoe_size || getShoeSize(age)[0];
+
+  // 2 κατηγορίες: παπούτσια + μπλούζες
+  const searches = [
+    { q: `παιδικά παπούτσια ${gender} ${shoe}`, label: 'παπούτσια', emoji: '👟' },
+    { q: `παιδικές μπλούζες ${gender}`,          label: 'μπλούζες',  emoji: '👕' },
+  ];
+
+  let sent = 0;
+  for (const s of searches) {
+    try {
+      const serpData = await fetchSerpApi(s.q);
+      const results  = (serpData?.shopping_results || []).filter(r => r.price && r.title);
+      if (results.length === 0) {
+        // Fallback: στείλε generic Skroutz link
+        await sendFCMNotification(
+          deviceToken,
+          `${s.emoji} Βρήκα ${s.label} για τον/την ${name}!`,
+          `Δες τα καλύτερα αποτελέσματα στο Skroutz →`,
+          { type: 'welcome_suggestion', category: s.label, link: `https://www.skroutz.gr/search?keyphrase=${encodeURIComponent(s.q)}`, kidName: name }
+        );
+        sent++;
+        await new Promise(r => setTimeout(r, 3000));
+        continue;
+      }
+
+      // Βρίσκουμε top προϊόν: καλύτερος συνδυασμός rating + τιμή
+      const top = results.sort((a, b) => {
+        const pa = parseFloat((a.price||'').replace(/[^\d.,]/g,'').replace(',','.')) || 999;
+        const pb = parseFloat((b.price||'').replace(/[^\d.,]/g,'').replace(',','.')) || 999;
+        const ra = a.rating || 3, rb = b.rating || 3;
+        return (rb * 15 - pb * 0.5) - (ra * 15 - pa * 0.5);
+      })[0];
+
+      const price = top.price || '';
+      const title = (top.title || '').substring(0, 55);
+      const link  = top.link || `https://www.skroutz.gr/search?keyphrase=${encodeURIComponent(s.q)}`;
+
+      const ok = await sendFCMNotification(
+        deviceToken,
+        `${s.emoji} ${name}: βρήκα ${s.label}!`,
+        `${title} — ${price}`,
+        { type: 'welcome_suggestion', category: s.label, link, kidName: name }
+      );
+      if (ok) sent++;
+
+      // 3 δευτερόλεπτα μεταξύ notifications
+      await new Promise(r => setTimeout(r, 3000));
+    } catch (err) {
+      console.error(`welcome suggestion [${s.label}] error:`, err.message);
+    }
+  }
+  console.log(`🎉 Welcome suggestions: ${sent}/2 sent for ${name}`);
+  return sent;
+}
+
+// ============================================================
+// DAILY REMINDER ENGINE
 // ============================================================
 async function runDailyReminders() {
   console.log('\n🔔 Running daily reminder check...');
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.warn('⚠️ Supabase not configured — skipping reminders');
-    return;
-  }
-
+  if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn('⚠️ Supabase not configured — skipping'); return; }
   try {
-    // Φέρε όλα τα active FCM tokens με profiles
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/fcm_tokens?select=user_id,token,profile&order=updated_at.desc`,
-      {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-        }
-      }
-    );
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?select=user_id,token,profile&order=updated_at.desc`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
     const tokens = await res.json();
     if (!Array.isArray(tokens)) { console.warn('⚠️ No tokens found'); return; }
-
     console.log(`📋 Found ${tokens.length} users`);
     let sent = 0;
-
     for (const row of tokens) {
       if (!row.token || !row.profile) continue;
       const reminders = calcReminders(row.profile);
       for (const r of reminders) {
         const ok = await sendFCMNotification(row.token, r.title, r.body, r.data);
         if (ok) sent++;
+        await new Promise(r => setTimeout(r, 200));
       }
     }
-
     console.log(`✅ Daily reminders done — ${sent} notifications sent\n`);
-  } catch (err) {
-    console.error('❌ Daily reminder error:', err.message);
-  }
+  } catch (err) { console.error('❌ Daily reminder error:', err.message); }
 }
-
-// ============================================================
-// LINKWISE FEED URLs
-// ============================================================
-const LW_BASE = 'https://affiliate.linkwi.se/feeds/1.2/CD28202/programs-joined/columns-product_name,category,brand_name,tracking_url,thumb_url,in_stock,on_sale,price,discount,size/catinc-0/catex-0';
-const LW_FEED_URLS = {
-  shoes:   `${LW_BASE}/proginc-385-251/progex-0/feed.json`,
-  toys:    `${LW_BASE}/proginc-11307-622/progex-0/feed.json`,
-  clothes: `${LW_BASE}/proginc-14015-2746/progex-0/feed.json`,
-};
 
 // ============================================================
 // HELPERS
@@ -242,62 +234,39 @@ function nm(str) {
     .replace(/ΐ/g,'ι').replace(/ΰ/g,'υ');
 }
 
-function getFeedTypeForCategory(offersCategory) {
-  if (['shoes','baby_shoes','SHOES'].includes(offersCategory))                         return 'shoes';
-  if (['toys','baby_toys','TOYS','SCHOOL'].includes(offersCategory))                   return 'toys';
-  if (['clothes','baby_clothes','CLOTHES','SWIMWEAR','BABY','SUMMER'].includes(offersCategory)) return 'clothes';
-  if (offersCategory === 'SPORTS')                                                     return 'shoes';
-  return 'general';
-}
-
 function getShoeSize(age) {
-  if (age < 1)  return ['17','18','19'];
-  if (age < 2)  return ['19','20','21','22'];
-  if (age < 3)  return ['22','23','24','25'];
-  if (age < 4)  return ['25','26','27'];
-  if (age < 5)  return ['27','28','29'];
-  if (age < 6)  return ['29','30','31'];
-  if (age < 7)  return ['31','32','33'];
-  if (age < 8)  return ['32','33','34'];
-  if (age < 9)  return ['33','34','35'];
-  if (age < 10) return ['34','35','36'];
-  if (age < 11) return ['35','36','37'];
-  if (age < 12) return ['36','37','38'];
+  if (age < 1) return ['17','18','19']; if (age < 2) return ['19','20','21','22'];
+  if (age < 3) return ['22','23','24','25']; if (age < 4) return ['25','26','27'];
+  if (age < 5) return ['27','28','29']; if (age < 6) return ['29','30','31'];
+  if (age < 7) return ['31','32','33']; if (age < 8) return ['32','33','34'];
+  if (age < 9) return ['33','34','35']; if (age < 10) return ['34','35','36'];
+  if (age < 11) return ['35','36','37']; if (age < 12) return ['36','37','38'];
   return ['37','38','39','40'];
 }
 
 function getClothingSize(age) {
-  if (age < 0.25) return ['50','56'];
-  if (age < 0.5)  return ['56','62'];
-  if (age < 1)    return ['62','68','74'];
-  if (age < 2)    return ['80','86'];
-  if (age < 3)    return ['86','92'];
-  if (age < 4)    return ['92','98','104'];
-  if (age < 5)    return ['104','110'];
-  if (age < 6)    return ['110','116'];
-  if (age < 7)    return ['116','122'];
-  if (age < 8)    return ['122','128'];
-  if (age < 9)    return ['128','134'];
-  if (age < 10)   return ['134','140'];
-  if (age < 12)   return ['140','146','152'];
-  if (age < 14)   return ['152','158','164'];
-  return ['164','170','176'];
+  if (age < 0.5) return ['50','56','62']; if (age < 1) return ['62','68','74'];
+  if (age < 2) return ['80','86']; if (age < 3) return ['86','92'];
+  if (age < 4) return ['92','98','104']; if (age < 5) return ['104','110'];
+  if (age < 6) return ['110','116']; if (age < 7) return ['116','122'];
+  if (age < 8) return ['122','128']; if (age < 9) return ['128','134'];
+  if (age < 10) return ['134','140']; if (age < 12) return ['140','146','152'];
+  if (age < 14) return ['152','158','164']; return ['164','170','176'];
 }
-
-const CATEGORIES = {
-  SHOES:   { triggers: ['παπουτσια','παπουτσι','πεδιλα','μποτακια','sneakers','shoes','boots','σανδαλια','μπαλαρινα'] },
-  CLOTHES: { triggers: ['ρουχα','μπλουζα','παντελονι','φορμα','φουστα','μπουφαν','φορεμα','ζακετα','κολαν','πιτζαμα','σετ ρουχων','jeans'] },
-  SWIMWEAR:{ triggers: ['μαγιο','μπικινι','swimwear','swim','παραλια'] },
-  TOYS:    { triggers: ['παιχνιδι','παιχνιδια','κουκλα','lego','playmobil','toy','puzzle','παζλ','επιτραπεζιο'] },
-  SCHOOL:  { triggers: ['σχολικα','τσαντα','κασετινα','μολυβι','τετραδιο','σχολειο','school'] },
-  SPORTS:  { triggers: ['αθλητικα','ποδοσφαιρο','μπαλα','sport','basketball','κολυμβηση'] },
-  BABY:    { triggers: ['βρεφικα','βρεφος','μωρο','baby','νεογεννητο'] },
-};
 
 function detectCategory(query) {
   const q = nm(query);
-  for (const [name, cat] of Object.entries(CATEGORIES)) {
-    if (cat.triggers?.some(t => q.includes(nm(t)))) return name;
+  const cats = {
+    SHOES:    ['παπουτσια','παπουτσι','πεδιλα','μποτακια','sneakers','shoes','boots','σανδαλια','μπαλαρινα'],
+    CLOTHES:  ['ρουχα','μπλουζα','παντελονι','φορμα','φουστα','μπουφαν','φορεμα','ζακετα','κολαν','πιτζαμα','jeans','φουτερ'],
+    SWIMWEAR: ['μαγιο','μπικινι','swimwear','swim','παραλια'],
+    TOYS:     ['παιχνιδι','παιχνιδια','κουκλα','lego','playmobil','toy','puzzle','παζλ','επιτραπεζιο'],
+    SCHOOL:   ['σχολικα','τσαντα','κασετινα','μολυβι','τετραδιο','σχολειο','school'],
+    SPORTS:   ['αθλητικα','ποδοσφαιρο','μπαλα','sport','basketball','κολυμβηση'],
+    BABY:     ['βρεφικα','βρεφος','μωρο','baby','νεογεννητο'],
+  };
+  for (const [name, triggers] of Object.entries(cats)) {
+    if (triggers.some(t => q.includes(nm(t)))) return name;
   }
   return 'GENERAL';
 }
@@ -312,7 +281,7 @@ function isAgeRelevant(title, age) {
 function generateStoreLink(item) {
   if (item.link && !item.link.includes('google.com/')) return item.link;
   if (item.product_link && !item.product_link.includes('google.com/')) return item.product_link;
-  const title  = encodeURIComponent(item.title || '');
+  const title = encodeURIComponent(item.title || '');
   const source = (item.source || '').toLowerCase();
   if (source.includes('public'))     return `https://www.public.gr/search/?text=${title}`;
   if (source.includes('jumbo'))      return `https://www.e-jumbo.gr/search?q=${title}`;
@@ -333,16 +302,12 @@ function scoreProduct(item, gender, age) {
     if (genderKws[gender].pos.some(k => title.includes(k))) genderScore += 100;
     if (genderKws[gender].neg.some(k => title.includes(k))) genderScore -= 150;
   }
-  const priceScore  = priceValue ? Math.max(0, 100 - priceValue/2) : 50;
-  const ratingScore = item.rating ? (item.rating/5)*100 : 50;
+  const priceScore   = priceValue ? Math.max(0, 100 - priceValue/2) : 50;
+  const ratingScore  = item.rating ? (item.rating/5)*100 : 50;
   const reviewsScore = Math.min((item.reviews||0)/10, 50);
   return {
-    priceValue,
-    rating: item.rating || null,
-    reviews: item.reviews || 0,
-    genderScore,
-    isAffiliate: false,
-    source_type: 'serpapi',
+    priceValue, rating: item.rating || null, reviews: item.reviews || 0,
+    genderScore, isAffiliate: false, source_type: 'serpapi',
     finalScore: Math.round(priceScore*0.35 + ratingScore*0.25 + reviewsScore*0.15 + 50*0.15 + genderScore*0.10),
     buyLink: generateStoreLink(item),
   };
@@ -370,14 +335,22 @@ const server = http.createServer(async (req, res) => {
 
   const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
 
-  // ── Health ──────────────────────────────────────────────
+  function readBody() {
+    return new Promise((resolve) => {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { resolve({}); } });
+    });
+  }
+
+  // ── /health ──
   if (parsedUrl.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', feeds: Object.keys(LW_FEED_URLS), supabase: !!SUPABASE_URL }));
+    res.end(JSON.stringify({ status:'ok', supabase: !!SUPABASE_URL, fcm: !!serviceAccount?.private_key }));
     return;
   }
 
-  // ── Search ──────────────────────────────────────────────
+  // ── /api/search ──
   if (parsedUrl.pathname === '/api/search' && req.method === 'GET') {
     try {
       const baseQuery      = parsedUrl.searchParams.get('q') || '';
@@ -396,10 +369,6 @@ const server = http.createServer(async (req, res) => {
       const effectiveCategory = offersCategory || category;
       let serpResults = [];
 
-      const feedType = getFeedTypeForCategory(effectiveCategory);
-      const feedUrl  = feedType && feedType !== 'general' ? LW_FEED_URLS[feedType] : null;
-
-      // SerpAPI
       const genderGr = gender === 'Αγόρι' ? 'αγόρι' : 'κορίτσι';
       const genderEn = gender === 'Αγόρι' ? 'boys'  : 'girls';
       let sizeHint   = '';
@@ -411,7 +380,7 @@ const server = http.createServer(async (req, res) => {
         `${baseQuery} ${genderEn} ${age} years`,
       ];
 
-      const serpRaw  = await Promise.all(serpQueries.map(fetchSerpApi));
+      const serpRaw = await Promise.all(serpQueries.map(fetchSerpApi));
       const seenSerp = new Set();
       serpRaw.forEach(data => {
         data?.shopping_results?.forEach(item => {
@@ -425,184 +394,118 @@ const server = http.createServer(async (req, res) => {
           }
         });
       });
-      console.log(`🌐 SerpAPI: ${serpResults.length}`);
 
       serpResults.sort((a, b) => b.finalScore - a.finalScore);
-      console.log(`✅ Total: ${serpResults.length} (serp:${serpResults.length})`);
+      console.log(`✅ SerpAPI: ${serpResults.length}`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         shopping_results: serpResults,
-        metadata: {
-          total: serpResults.length,
-          category,
-          feedUrl,
-          feedType,
-          gender, age, shoeSize, clothingSize,
-          suggestedSize: category === 'SHOES' ? (shoeSize || getShoeSize(age)[0]) : (clothingSize || getClothingSize(age)[0]),
-        }
+        metadata: { total: serpResults.length, category, gender, age, shoeSize, clothingSize }
       }));
 
     } catch (err) {
-      console.error('❌', err);
+      console.error('❌ Search error:', err);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Search failed', message: err.message }));
     }
+    return;
+  }
 
-  // ── Feed Proxy ──────────────────────────────────────────
-  } else if (parsedUrl.pathname === '/api/feed') {
-    const feedType     = parsedUrl.searchParams.get('type') || 'shoes';
-    const shoeSize     = parsedUrl.searchParams.get('shoeSize') || '';
-    const clothingSize = parsedUrl.searchParams.get('clothingSize') || '';
-    const gender       = parsedUrl.searchParams.get('gender') || '';
-
-    const feedUrl = LW_FEED_URLS[feedType];
-    if (!feedUrl) { res.writeHead(400); res.end('Unknown feed type'); return; }
-
+  // ── /api/register-token ──
+  if (parsedUrl.pathname === '/api/register-token' && req.method === 'POST') {
     try {
-      const ctrl  = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 25000);
-      const lwRes = await fetch(feedUrl, { signal: ctrl.signal });
-      clearTimeout(timer);
-      if (!lwRes.ok) throw new Error(`Feed HTTP ${lwRes.status}`);
+      const { userId, token, profile } = await readBody();
+      if (!userId || !token) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing userId or token' })); return; }
 
-      const MAX_BYTES = 8 * 1024 * 1024;
-      let received = 0;
-      const chunks = [];
-      const reader = lwRes.body.getReader();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (received >= MAX_BYTES) { reader.cancel(); break; }
-      }
-
-      let text = new TextDecoder().decode(Buffer.concat(chunks.map(c => Buffer.from(c))));
-      if (!text.trimEnd().endsWith(']')) {
-        const cut = text.lastIndexOf('},');
-        if (cut > 0) text = text.slice(0, cut + 1) + ']';
-      }
-
-      const all      = JSON.parse(text);
-      const genderGr = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
-      const oppGr    = gender === 'Αγόρι' ? 'κοριτσι' : 'αγορι';
-      const tShoe    = parseInt(shoeSize) || 0;
-      const results  = [];
-
-      for (const p of all) {
-        if (results.length >= 60) break;
-        if (!p.product_name || !p.price) continue;
-        const stock = (p.in_stock || '').toString().toLowerCase();
-        if (stock === '0' || stock === 'n' || stock === 'false') continue;
-        const title = nm(p.product_name);
-        const cat   = nm(p.category || '');
-        if (cat.includes('ανδρ') || cat.includes('γυναικ') || cat.includes('women')) continue;
-        if (title.includes(oppGr) || cat.includes(oppGr)) continue;
-        if (tShoe && p.size?.trim()) {
-          const sizes = p.size.split(/[,;\s]+/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x));
-          if (sizes.length > 0 && ![tShoe-1,tShoe,tShoe+1].some(s=>sizes.includes(String(s)))) continue;
-        }
-        if (clothingSize && !tShoe && p.size?.trim()) {
-          const sizes = p.size.split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
-          if (sizes.length > 0 && !sizes.some(s=>s===clothingSize)) continue;
-        }
-        const price = parseFloat((p.price||'0').replace(',','.').replace(/[^0-9.]/g,'')) || 0;
-        results.push({
-          product_id:  'lw_' + Math.random().toString(36).substr(2,8),
-          title:       p.product_name,
-          price:       price ? price.toFixed(2)+'€' : p.price,
-          priceValue:  price,
-          thumbnail:   p.thumb_url || null,
-          buyLink:     p.tracking_url,
-          source:      (() => { try { return new URL(decodeURIComponent((p.tracking_url||'').split('lnkurl=')[1]||p.tracking_url)).hostname.replace('www.',''); } catch { return 'Κατάστημα'; } })(),
-          isAffiliate: true,
-          finalScore:  price ? Math.max(0, 100 - price/2) : 50,
-          attributes:  {},
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Prefer': 'resolution=merge-duplicates',
+          },
+          body: JSON.stringify({ user_id: userId, token, profile, updated_at: new Date().toISOString() }),
         });
       }
 
-      console.log(`✅ Feed proxy [${feedType}]: ${results.length} products (${Math.round(received/1024)}KB read)`);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ results }));
+      const reminders = profile ? calcReminders(profile) : [];
+      for (const r of reminders) {
+        await sendFCMNotification(token, r.title, r.body, r.data);
+      }
 
-    } catch(err) {
-      console.error('Feed proxy error:', err.message);
+      console.log(`📱 Token registered: ${userId.substring(0,8)}... | reminders: ${reminders.length}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ results: [], error: err.message }));
+      res.end(JSON.stringify({ ok: true, reminders: reminders.length }));
+    } catch (err) {
+      console.error('register-token error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
     }
-
-  // ── Register FCM Token ──────────────────────────────────
-  } else if (parsedUrl.pathname === '/api/register-token' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { userId, token, profile } = JSON.parse(body);
-        if (!userId || !token) { res.writeHead(400); res.end('Missing userId or token'); return; }
-
-        if (SUPABASE_URL && SUPABASE_KEY) {
-          await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${SUPABASE_KEY}`,
-              'Prefer': 'resolution=merge-duplicates',
-            },
-            body: JSON.stringify({
-              user_id:    userId,
-              token,
-              profile,
-              updated_at: new Date().toISOString()
-            }),
-          });
-        }
-
-        // Στείλε pending reminders
-        const reminders = profile ? calcReminders(profile) : [];
-        for (const r of reminders) {
-          await sendFCMNotification(token, r.title, r.body, r.data);
-        }
-
-        console.log(`📱 Token registered for user ${userId}, ${reminders.length} reminders sent`);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, reminders: reminders.length }));
-      } catch(err) {
-        console.error('register-token error:', err.message);
-        res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
-      }
-    });
-
-  // ── Test Notification ───────────────────────────────────
-  } else if (parsedUrl.pathname === '/api/test-notification' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { token } = JSON.parse(body);
-        const ok = await sendFCMNotification(token, '🎉 Smart Kids', 'Οι ειδοποιήσεις λειτουργούν!', { type: 'test' });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok }));
-      } catch(err) {
-        res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
-      }
-    });
-
-  } else {
-    res.writeHead(404); res.end('Not Found');
+    return;
   }
+
+  // ── /api/welcome-suggestions ── ← ΝΕΟ
+  // Καλείται αμέσως μετά αποθήκευση παιδιού
+  if (parsedUrl.pathname === '/api/welcome-suggestions' && req.method === 'POST') {
+    try {
+      const { userId, token, kid } = await readBody();
+      if (!token || !kid) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing token or kid' })); return; }
+
+      // Τρέχει async — δεν περιμένει να τελειώσει για να απαντήσει
+      sendWelcomeSuggestions(token, kid).catch(err => console.error('welcome bg error:', err.message));
+
+      console.log(`🎉 Welcome suggestions triggered for: ${kid.name}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, message: 'Suggestions sending in background' }));
+    } catch (err) {
+      console.error('welcome-suggestions error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // ── /api/test-notification ──
+  if (parsedUrl.pathname === '/api/test-notification' && req.method === 'POST') {
+    try {
+      const { userId, token: directToken } = await readBody();
+      let deviceToken = directToken;
+
+      // Αν δεν δόθηκε token απευθείας, ψάξε από Supabase
+      if (!deviceToken && userId && SUPABASE_URL && SUPABASE_KEY) {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?user_id=eq.${userId}&select=token`, {
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+        });
+        const rows = await r.json();
+        deviceToken = rows?.[0]?.token;
+      }
+
+      if (!deviceToken) { res.writeHead(400); res.end(JSON.stringify({ error: 'Token not found' })); return; }
+
+      const ok = await sendFCMNotification(deviceToken, '🎉 Smart Kids', 'Οι ειδοποιήσεις λειτουργούν! ✅', { type: 'test' });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok, success: ok }));
+    } catch (err) {
+      console.error('test-notification error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  res.writeHead(404); res.end('Not Found');
 });
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n${'='.repeat(50)}`);
   console.log(`🚀 SMART KIDS Server on port ${PORT}`);
+  console.log(`   FCM:     ${serviceAccount?.private_key ? '✅' : '❌'}`);
+  console.log(`   SerpAPI: ${SERPAPI_KEY ? '✅' : '❌'}`);
+  console.log(`   Supabase:${SUPABASE_URL ? '✅' : '❌'}`);
   console.log(`${'='.repeat(50)}\n`);
 
-  // ── Daily Reminder Engine ──
-  // Τρέχει αμέσως μια φορά (για τυχόν σημερινά reminders) και μετά κάθε 24 ώρες
   setTimeout(() => {
     runDailyReminders();
     setInterval(runDailyReminders, 24 * 60 * 60 * 1000);
-  }, 10000); // 10 δευτερόλεπτα μετά το startup
+  }, 10000);
 });
