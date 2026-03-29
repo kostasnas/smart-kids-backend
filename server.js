@@ -121,6 +121,8 @@ function getFeedTypeForCategory(offersCategory) {
   if (offersCategory === 'TOYS' || offersCategory === 'SCHOOL')               return 'toys';
   if (['CLOTHES','SWIMWEAR','BABY','SUMMER'].includes(offersCategory))        return 'clothes';
   if (offersCategory === 'SPORTS')                                            return 'shoes'; // shoes feed has sports too
+  // Additional categories from Offers.jsx - map to appropriate feeds
+  if (['school_bags','school_supplies','bikes','tech','gaming','baby_gear','baby_safety'].includes(offersCategory)) return 'toys';
   // GENERAL: load shoes + clothes (most common) — toys separate
   if (offersCategory === 'GENERAL')                                           return 'general';
   return 'general';
