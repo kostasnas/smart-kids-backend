@@ -30,6 +30,7 @@
     "@capacitor/browser": "^8.0.3",
     "@capacitor/inappbrowser": "^3.0.2",
     "@capacitor/push-notifications": "^8.0.2",
+    "@react-native-async-storage/async-storage": "^3.0.2",
     "@supabase/supabase-js": "^2.98.0",
     "cors": "^2.8.6",
     "framer-motion": "^12.38.0",

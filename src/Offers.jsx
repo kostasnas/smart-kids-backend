@@ -5,12 +5,14 @@ import { useAuth } from './components/AuthProvider';
 import { supabaseService } from './services/supabase';
 import { toAffiliateLink, hasAffiliateProgram } from './services/linkwise';
 import { saveToWishlistWithImage } from './utils/imageExtractor';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Tag, Flame, ExternalLink, RefreshCw, Loader2,
   AlertCircle, SlidersHorizontal, X, Star, ShoppingCart
 } from 'lucide-react';
 import { registerPlugin } from '@capacitor/core';
 import { searchMultipleStores, MOBILE_USER_AGENT, STORES, createProductCardProps } from './services/multiStoreSearch';
+import SearchSourceModal from './components/SearchSourceModal';
 
 // Register the PartialWebView plugin
 const PartialWebView = registerPlugin('PartialWebView');
@@ -212,9 +214,21 @@ function SmartBrowserSheet({ browserState, currentUrl, isProduct, onClose, onSav
           </button>
         </div>
       </div>
+      {/* Search Source Modal */}
+      <SearchSourceModal
+        visible={showSearchSourceModal}
+        onClose={() => setShowSearchSourceModal(false)}
+        onSelect={(source) => {
+          setSearchSource(source);
+          // Trigger a new search with the selected source
+          if (selectedKid) {
+            fetchOffers(selectedKid);
+          }
+        }}
+      />
     </div>
   );
-}
+};
 
 function estimateShoeSize(age) {
   if (age < 1) return '17'; if (age < 2) return '20'; if (age < 3) return '23';
@@ -330,6 +344,8 @@ const Offers = () => {
   const [sortBy, setSortBy]                           = useState('score');
   const [priceRange, setPriceRange]                   = useState('all');
   const [availableCategories, setAvailableCategories] = useState([]);
+  const [searchSource, setSearchSource]               = useState('linkwise');
+  const [showSearchSourceModal, setShowSearchSourceModal] = useState(false);
 
   // Smart Browser
   const smartBrowser = useSmartBrowser();
@@ -390,6 +406,21 @@ const Offers = () => {
     }
   }
 
+  // Load search source preference on mount
+  useEffect(() => {
+    const loadSearchSourcePreference = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('searchSourcePreference');
+        if (saved) {
+          setSearchSource(saved);
+        }
+      } catch (error) {
+        console.log('Failed to load search source preference:', error);
+      }
+    };
+    loadSearchSourcePreference();
+  }, []);
+
   // Φόρτωση kids on mount + όταν αλλάζει auth
   useEffect(() => { loadKids(); }, [isAuthenticated]);
 
@@ -426,6 +457,7 @@ const Offers = () => {
           gender:         kid.gender,
           age:            kid.age,
           offersCategory: qItem.category,
+          searchSource:     searchSource,
           ...(qItem.shoeSize     && { shoeSize:     qItem.shoeSize }),
           ...(qItem.clothingSize && { clothingSize: qItem.clothingSize }),
         });
@@ -576,19 +608,6 @@ const Offers = () => {
             <Tag size={24} /> Προσφορές
           </h1>
           <div className="flex gap-2">
-            <button onClick={() => setShowFilters(!showFilters)}
-              className={`p-2 rounded-xl active:scale-95 transition-all relative ${hasActiveFilters ? 'bg-white' : 'bg-white/20'}`}>
-              <SlidersHorizontal size={18} className={hasActiveFilters ? 'text-amber-600' : 'text-white'} />
-              {hasActiveFilters && <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[8px] font-black text-white flex items-center justify-center">!</span>}
-            </button>
-            <button onClick={() => selectedKid && fetchOffers(selectedKid)} disabled={loading}
-              className="bg-white/20 p-2 rounded-xl active:scale-95 transition-all disabled:opacity-50">
-              <RefreshCw size={18} className={`text-white ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
-        {/* Kid selector — prev/next αντί για scroll για να μη συγκρούεται με page swipe */}
-        {kids.length > 0 && (
           <div className="flex items-center gap-2">
             {kids.length > 1 && (
               <button
@@ -852,6 +871,19 @@ const Offers = () => {
           </div>
         )}
       </div>
+
+      {/* Search Source Modal */}
+      <SearchSourceModal
+        visible={showSearchSourceModal}
+        onClose={() => setShowSearchSourceModal(false)}
+        onSelect={(source) => {
+          setSearchSource(source);
+          // Trigger a new search with the selected source
+          if (selectedKid) {
+            fetchOffers(selectedKid);
+          }
+        }}
+      />
 
       {/* SmartBrowserSheet */}
       <SmartBrowserSheet
