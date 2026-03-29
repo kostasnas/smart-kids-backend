@@ -1,0 +1,18 @@
+{
+  "appId": "com.smartkids.app",
+  "appName": "Smart Kids",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "App": {
+      "launchUrl": "com.smartkids.app"
+    }
+  }
+}

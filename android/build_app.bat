@@ -1,0 +1,3 @@
+@echo off
+gradlew clean assembleDebug "-Dorg.gradle.java.home=C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot"
+pause

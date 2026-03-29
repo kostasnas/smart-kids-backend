@@ -1,0 +1,29 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+    components {
+        withModule('com.android.tools.build:gradle') {
+            allVariants {
+                withDependencies {
+                    clear() // Διαγράφει οποιαδήποτε άλλη απαίτηση έκδοσης
+                }
+            }
+        }
+    }
+}
+
+include ':app'
+
+
+apply from: 'capacitor.settings.gradle'

@@ -1,0 +1,16 @@
+ext {
+    minSdkVersion = 26
+    compileSdkVersion = 36
+    targetSdkVersion = 36
+    androidxActivityVersion = '1.11.0'        // Ενημερώθηκε για SDK 36
+    androidxAppCompatVersion = '1.7.1'
+    androidxCoordinatorLayoutVersion = '1.3.0' // Ενημερώθηκε
+    androidxCoreVersion = '1.17.0'            // Ενημερώθηκε
+    androidxFragmentVersion = '1.8.9'         // Ενημερώθηκε
+    coreSplashScreenVersion = '1.0.1'
+    androidxWebkitVersion = '1.14.0'          // Ενημερώθηκε
+    junitVersion = '4.13.2'
+    androidxJunitVersion = '1.2.1'
+    androidxEspressoCoreVersion = '3.6.1'
+    cordovaAndroidVersion = '10.1.1'
+}
