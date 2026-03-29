@@ -246,12 +246,12 @@ function buildKidQueries(kid) {
 
   if (isBaby) {
     return [
-      { q: `βρεφικά ρούχα`,           category: 'baby_clothes',    label: '👶 Βρεφικά Ρούχα',         clothingSize },
-      { q: `παπούτσια βρέφος`,         category: 'baby_shoes',      label: '🥿 Βρεφικά Παπούτσια',     shoeSize },
-      { q: `βρεφικά είδη`,             category: 'baby_essentials', label: '🍼 Βρεφικά Είδη' },
-      { q: `παιχνίδια βρέφους`,        category: 'baby_toys',       label: '🧸 Παιχνίδια Βρέφους' },
-      { q: `καρότσι`,                  category: 'baby_gear',       label: '🛒 Καρότσια' },
-      { q: `κάθισμα αυτοκινήτου`,      category: 'baby_safety',     label: '🚗 Καθίσματα Αυτοκινήτου' },
+      { q: `βρεφικά ρούχα`,           category: 'clothes', label: '👶 Βρεφικά Ρούχα',         clothingSize },
+      { q: `παπούτσια βρέφος`,         category: 'shoes',   label: '🥿 Βρεφικά Παπούτσια',     shoeSize },
+      { q: `βρεφικά είδη`,             category: 'clothes', label: '🍼 Βρεφικά Είδη' },
+      { q: `παιχνίδια βρέφους`,        category: 'toys',    label: '🧸 Παιχνίδια Βρέφους' },
+      { q: `καρότσι`,                  category: 'toys',    label: '🛒 Καρότσια' },
+      { q: `κάθισμα αυτοκινήτου`,      category: 'toys',    label: '🚗 Καθίσματα Αυτοκινήτου' },
     ];
   }
 
@@ -268,47 +268,38 @@ function buildKidQueries(kid) {
 
   if (isKid) {
     queries.push(
-      { q: `σχολική τσάντα ${gender}`,   category: 'school_bags',     label: '🎒 Σχολικές Τσάντες' },
-      { q: `σχολικά είδη`,               category: 'school_supplies', label: '✏️ Γραφική Ύλη' }
+      { q: `σχολική τσάντα ${gender}`,   category: 'toys',     label: '🎒 Σχολικές Τσάντες' },
+      { q: `σχολικά είδη`,               category: 'toys',     label: '✏️ Γραφική Ύλη' }
     );
   }
 
   if (age >= 4) {
-    // Αθλητικά — με sport αν υπάρχει
+    // Αθλητικά — map to shoes feed (includes sports items)
     queries.push({
       q: sport ? `${sport} παιδικό ${gender}` : `αθλητικά ${gender}`,
-      category: 'sports', label: '⚽ Αθλητικά',
+      category: 'shoes', label: '⚽ Αθλητικά',
     });
   }
 
   if (age >= 3) {
-    queries.push({ q: `ποδήλατο παιδικό`,  category: 'bikes', label: '🚲 Ποδήλατα & Πατίνια' });
-    queries.push({ q: `tablet παιδικό`,    category: 'tech',  label: '📱 Tablet & Tech' });
+    // Ποδήλατα & Πατίνια - map to toys feed
+    queries.push({ q: `ποδήλατο παιδικό`,  category: 'toys', label: '🚲 Ποδήλατα & Πατίνια' });
+    // Tablet - map to toys feed (electronics category)
+    queries.push({ q: `tablet παιδικό`,    category: 'toys',  label: '📱 Tablet & Tech' });
   }
 
   if (age >= 6) {
-    queries.push({ q: `gaming παιχνίδια`, category: 'gaming', label: '🎮 Gaming' });
+    // Gaming - map to toys feed
+    queries.push({ q: `gaming παιχνίδια`, category: 'toys', label: '🎮 Gaming' });
   }
 
   return queries;
 }
 
 const CATEGORY_LABELS = {
-  baby_clothes:    '👶 Βρεφικά Ρούχα',
-  baby_shoes:      '🥿 Βρεφικά Παπούτσια',
-  baby_essentials: '🍼 Βρεφικά Είδη',
-  baby_toys:       '🧸 Παιχνίδια Βρέφους',
-  baby_gear:       '🛒 Καρότσια',
-  baby_safety:     '🚗 Καθίσματα Αυτοκινήτου',
-  shoes:           '👟 Παπούτσια',
+  shoes:           ' Παπούτσια',
   clothes:         '👕 Ρούχα',
   toys:            '🧸 Παιχνίδια',
-  school_bags:     '🎒 Σχολικές Τσάντες',
-  school_supplies: '✏️ Γραφική Ύλη',
-  sports:          '⚽ Αθλητικά',
-  bikes:           '🚲 Ποδήλατα & Πατίνια',
-  tech:            '📱 Tablet & Tech',
-  gaming:          '🎮 Gaming',
   other:           '📦 Άλλα',
 };
 

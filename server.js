@@ -3,7 +3,8 @@ import http from 'http';
 import { URL } from 'url';
 
 const PORT = process.env.PORT || 3001;
-const SERPAPI_KEY = process.env.SERPAPI_KEY;
+// DISABLED - SerpAPI account empty
+// const SERPAPI_KEY = process.env.SERPAPI_KEY;
 
 // ============================================================
 // LINKWISE FEEDS ΑΝΑ ΚΑΤΗΓΟΡΙΑ
@@ -20,8 +21,8 @@ const LW_FEEDS = {
   clothes: `${LW_BASE}/proginc-11562-711,14015-2746,11036-369,13712-2432,11754-880,11764-1059,13604-2421,138-2273,12174-1176,14123-2770,13199-1967,12345-1289/progex-0/feed.json`,
 };
 
-// Ποιες κατηγορίες χρησιμοποιούν ΜΟΝΟ SerpAPI (δεν υπάρχουν στο Linkwise)
-const SERP_ONLY_CATEGORIES = ['sports', 'bikes', 'tech', 'gaming', 'school_bags', 'school_supplies', 'baby_gear', 'baby_safety'];
+// DISABLED - No more SerpAPI calls
+// const SERP_ONLY_CATEGORIES = ['sports', 'bikes', 'tech', 'gaming', 'school_bags', 'school_supplies', 'baby_gear', 'baby_safety'];
 
 const feedCache = { shoes: null, clothes: null, toys: null };
 const feedCacheTime = { shoes: 0, clothes: 0, toys: 0 };
@@ -546,46 +547,13 @@ const server = http.createServer(async (req, res) => {
         console.log(`📦 Linkwise [${feedType}]: ${linkwiseResults.length}`);
       }
 
-      // ── SERPAPI: πάντα (supplement για linkwise ή primary για sports/bikes/tech κτλ) ──
-      const genderGr = gender === 'Αγόρι' ? 'αγόρι' : 'κορίτσι';
-      const genderEn = gender === 'Αγόρι' ? 'boys'  : 'girls';
+      // ── SERPAPI DISABLED ──
+      // We now use only Linkwise feeds + custom image extraction for Public/Jumbo
+      let serpResults = [];
+      console.log(`🌐 SerpAPI: DISABLED - using Linkwise only`);
 
-      let sizeHint = '';
-      if (effectiveCategory === 'shoes' || category === 'SHOES')   sizeHint = `νούμερο ${shoeSize || getShoeSize(age)[0]}`;
-      if (effectiveCategory === 'clothes' || category === 'CLOTHES') sizeHint = `μέγεθος ${clothingSize || getClothingSize(age)[0]}`;
-
-      const serpQueries = [
-        `${baseQuery} παιδικά ${genderGr} ${sizeHint}`.trim(),
-        `${baseQuery} ${genderEn} ${age} years`,
-      ];
-
-      const serpRaw  = await Promise.all(serpQueries.map(fetchSerpApi));
-      const seenSerp = new Set();
-      serpRaw.forEach(data => {
-        data?.shopping_results?.forEach(item => {
-          const id = item.product_id || item.link || item.title;
-          if (!seenSerp.has(id)) {
-            seenSerp.add(id);
-            const scored = scoreProduct(item, gender, age);
-            if (scored.genderScore > -50 && isAgeRelevant(item.title, age)) {
-              serpResults.push({
-                ...item, ...scored,
-                attributes: extractAttributes(item, category),
-                category:   effectiveCategory,
-              });
-            }
-          }
-        });
-      });
-      console.log(`🌐 SerpAPI: ${serpResults.length}`);
-
-      // ── MERGE: Linkwise πρώτα, μετά SerpAPI ──
-      const seen   = new Set();
-      const merged = [];
-      for (const p of [...linkwiseResults, ...serpResults]) {
-        const key = nm(p.title || '').substring(0, 30);
-        if (!seen.has(key)) { seen.add(key); merged.push(p); }
-      }
+      // ── MERGE: Linkwise only ──
+      const merged = linkwiseResults;
 
       merged.sort((a, b) => {
         if (a.isAffiliate && !b.isAffiliate) return -1;
@@ -597,12 +565,12 @@ const server = http.createServer(async (req, res) => {
       if (category === 'SHOES')   availableFilters.suggestedSize = shoeSize     ? [shoeSize]     : getShoeSize(age);
       if (category === 'CLOTHES') availableFilters.suggestedSize = clothingSize ? [clothingSize] : getClothingSize(age);
 
-      console.log(`✅ Total: ${merged.length} (lw:${linkwiseResults.length} + serp:${serpResults.length})`);
+      console.log(`✅ Total: ${merged.length} (Linkwise only)`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         shopping_results: merged,
-        metadata: { total: merged.length, affiliateCount: linkwiseResults.length, serpCount: serpResults.length, category, categoryLabel: catLabel, availableFilters, sizeSource: shoeSize||clothingSize ? 'profile':'age' }
+        metadata: { total: merged.length, affiliateCount: linkwiseResults.length, serpCount: 0, category, categoryLabel: catLabel, availableFilters, sizeSource: shoeSize||clothingSize ? 'profile':'age', serpApiDisabled: true }
       }));
 
 } catch (err) {
