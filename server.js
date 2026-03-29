@@ -549,7 +549,6 @@ const server = http.createServer(async (req, res) => {
 
       // ── SERPAPI DISABLED ──
       // We now use only Linkwise feeds + custom image extraction for Public/Jumbo
-      let serpResults = [];
       console.log(`🌐 SerpAPI: DISABLED - using Linkwise only`);
 
       // ── MERGE: Linkwise only ──
