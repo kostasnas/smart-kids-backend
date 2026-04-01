@@ -26,7 +26,9 @@ export function useStreamingOffers() {
     setProgress({ current: 0, total: queries.length, label: '' });
     setIsStreaming(true);
 
-    const url = new URL('/api/offers-stream', window.location.origin);
+    // ΑΝΤΙΚΑΤΑΣΤΑΣΗ ΓΡΑΜΜΗΣ 25
+const API_BASE = 'https://smart-kids-api.onrender.com';
+const url = new URL('/api/offers-stream', API_BASE);
     url.searchParams.append('queries', JSON.stringify(queries));
     if (gender) url.searchParams.append('gender', gender);
     if (age) url.searchParams.append('age', age);
