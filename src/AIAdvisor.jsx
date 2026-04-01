@@ -431,6 +431,14 @@ const AIAdvisor = () => {
       const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY;
       const TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY;
 
+      // Check if API keys are available
+      if (!GROQ_KEY) {
+        console.error('❌ GROQ_API_KEY is missing');
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Συγγνώμη, το API key για τον AI σύμβουλο δεν είναι διαθέσιμο.', text: 'Συγγνώμη, το API key για τον AI σύμβουλο δεν είναι διαθέσιμο.', suggestions: null }]);
+        setLoading(false);
+        return;
+      }
+
       // ── Βήμα 1: Tavily web search ──
       let webContext = '';
       if (TAVILY_KEY) {
@@ -450,8 +458,12 @@ const AIAdvisor = () => {
             const tavilyData = await tavilyRes.json();
             const results = tavilyData.results || [];
             if (tavilyData.answer) webContext += `Σύνοψη: ${tavilyData.answer}\n\n`;
-            results.forEach((r, i) => {
-              webContext += `[${i+1}] ${r.title}\n${r.content?.slice(0, 200)}\n\n`;
+            // Limit to first 10 results to save memory
+            results.slice(0, 10).forEach((r, i) => {
+              // Clean strings - keep only essential fields, limit content size
+              const title = (r.title || '').slice(0, 100);
+              const content = (r.content || '').slice(0, 200);
+              webContext += `[${i+1}] ${title}\n${content}\n\n`;
             });
           }
         } catch {}
@@ -481,6 +493,10 @@ ${webContext ? `\nΔΕΔΟΜΕΝΑ ΑΠΟ WEB:\n${webContext}` : ''}
 
 ΡΟΛΟΣ: Βοηθάς τον γονιό να βρει αυτό που χρειάζεται το παιδί, ανάλογα με εποχή, ηλικία, μεγέθη και προτιμήσεις.
 Αν ρωτηθείς για παιδί με ειδικές ανάγκες (τυφλό, κωφό, κινητικά προβλήματα κλπ), δώσε εξειδικευμένες, υπαρκτές επιλογές.
+
+ΣΗΜΑΝΤΙΚΗ ΣΗΜΕΙΩΣΗ: Επειδή το In-App Browser δεν επιστρέφει λίστα προϊόντων στον server:
+- Αν ο χρήστης ψάχνει στο Skroutz, πες: "Πλοηγηθείτε στο Skroutz για να βρείτε το προϊόν που σας αρέσει και πατήστε Αποθήκευση για να το παρακολουθήσω!"
+- Αν ο χρήστης ψάχνει σε Retail Shops (Linkwise), μπορείς να αναλύσεις κανονικά τα προϊόντα.
 
 ΚΑΝΟΝΕΣ ΑΠΑΝΤΗΣΗΣ:
 1. Απαντάς ΠΑΝΤΑ στα Ελληνικά
@@ -543,11 +559,30 @@ FORMAT JSON (ΥΠΟΧΡΕΩΤΙΚΟ στο τέλος):
       let suggestions = null;
       try {
         const m = raw.match(/```json\s*([\s\S]*?)```/);
-        if (m) suggestions = JSON.parse(m[1]);
-      } catch {}
+        if (m) {
+          suggestions = JSON.parse(m[1]);
+          // Validate suggestions structure
+          if (!Array.isArray(suggestions)) {
+            suggestions = null;
+          } else {
+            suggestions = suggestions.filter(s => s.name && s.query);
+          }
+        }
+      } catch (parseError) {
+        console.error('JSON parsing error:', parseError);
+        console.error('Raw response:', raw);
+        suggestions = null;
+      }
       const text = raw.replace(/```json[\s\S]*?```/, '').trim();
 
-      setMessages(prev => [...prev, { role: 'assistant', content: raw, text, suggestions }]);
+      // Check if we got valid suggestions
+      if (!suggestions || suggestions.length === 0) {
+        // No valid suggestions - likely due to wrong feed or no results
+        const fallbackText = 'Δεν βρήκα συγκεκριμένες προσφορές γι\' αυτή την κατηγορία στα καταστήματα, δοκιμάστε την αναζήτηση στο Skroutz!';
+        setMessages(prev => [...prev, { role: 'assistant', content: fallbackText, text: fallbackText, suggestions: null }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: raw, text, suggestions }]);
+      }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Συγγνώμη, κάτι πήγε στραβά!', text: 'Συγγνώμη, κάτι πήγε στραβά. Δοκίμασε ξανά!', suggestions: null }]);
     }

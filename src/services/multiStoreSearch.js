@@ -182,3 +182,61 @@ export function detectStoreCategory(query) {
 export const MOBILE_USER_AGENT =
   'Mozilla/5.0 (Linux; Android 12; Mobile) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
+// ── Helper Functions for Offers.jsx ───────────────────────────────
+
+/**
+ * Search multiple stores for a query (fallback when API fails)
+ */
+export const searchMultipleStores = async (query, category = 'all') => {
+  const results = [];
+  
+  // Get stores that match the category
+  const matchingStores = getStoresForCategory(category);
+  
+  for (const store of matchingStores.slice(0, 3)) { // Limit to 3 stores
+    const url = store.searchUrl(query);
+    const storeKey = Object.keys(STORES).find(key => STORES[key] === store);
+    
+    results.push({
+      id: `${storeKey || 'unknown'}_${Date.now()}`,
+      title: `${query} - ${store.name}`,
+      store: store.name,
+      price: 'N/A',
+      priceValue: 0,
+      thumbnail: null,
+      link: url,
+      isAffiliate: false,
+      rating: 0,
+      reviews: 0,
+      finalScore: 30,
+      category,
+      categoryLabel: query,
+      storeIcon: store.icon,
+      isSkroutzFallback: storeKey === 'SKROUTZ'
+    });
+  }
+  
+  return results;
+}
+
+/**
+ * Create product card props from API response
+ */
+export const createProductCardProps = (item) => {
+  return {
+    id: item.id || Math.random(),
+    title: item.title,
+    store: item.store || 'Διάφορα',
+    price: item.price || 'N/A',
+    priceValue: item.priceValue || 0,
+    thumbnail: item.thumbnail,
+    link: item.buyLink || item.link,
+    isAffiliate: item.isAffiliate || false,
+    rating: item.rating,
+    reviews: item.reviews || 0,
+    finalScore: item.finalScore || 50,
+    category: item.category,
+    categoryLabel: item.categoryLabel,
+  };
+}

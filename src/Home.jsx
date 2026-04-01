@@ -5,6 +5,7 @@ import { Search, X, ShoppingCart, Loader2, ArrowRight, Sparkles, ExternalLink, T
 import { useAuth } from './components/AuthProvider';
 import { supabaseService } from './services/supabase';
 import { saveToWishlistWithImage } from './utils/imageExtractor';
+import SearchSourceModal from './components/SearchSourceModal';
 
 // ── Ανιχνεύει αν το URL είναι σελίδα προϊόντος ───────────────
 function checkIsProduct(url) {
@@ -121,7 +122,15 @@ function SmartBrowserSheet({ browserState, currentUrl, isProduct, onClose, onSav
   };
 
   const handleGoBack = async () => {
-    try { await PartialWebView.goBack(); } catch {}
+    try {
+      const result = await PartialWebView.goBack();
+      // Αν δεν μπορεί να πάει πίσω → κλείσε τον browser
+      if (!result?.canGoBack) {
+        onClose();
+      }
+    } catch {
+      onClose();
+    }
   };
 
   if (!browserState) return null;
@@ -181,6 +190,11 @@ function SmartBrowserSheet({ browserState, currentUrl, isProduct, onClose, onSav
     <div style={{ position:'fixed', inset:0, zIndex:500, background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column', justifyContent:'flex-end' }} onClick={onClose}>
       <div style={{ background:'white', borderRadius:'20px 20px 0 0', height:'85vh', display:'flex', flexDirection:'column', overflow:'hidden' }} onClick={e=>e.stopPropagation()}>
         <div style={{ background:'#1a1a2e', padding:'10px 16px', display:'flex', alignItems:'center', gap:10 }}>
+          <button onClick={handleGoBack} style={{
+            background: 'rgba(255,255,255,0.12)', color: 'white',
+            border: 'none', borderRadius: 8, padding: '6px 10px',
+            fontSize: 14, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+          }}>‹</button>
           <div style={{ width:8, height:8, borderRadius:'50%', background: isProduct ? '#34d399' : '#fbbf24', flexShrink:0 }} />
           <p style={{ color:'rgba(255,255,255,0.7)', fontSize:10, margin:0, flex:1 }}>
             {isProduct ? '✅ Σελίδα προϊόντος' : '🔍 Αναζήτηση'}
@@ -200,6 +214,21 @@ function SmartBrowserSheet({ browserState, currentUrl, isProduct, onClose, onSav
       </div>
     </div>
   );
+}
+
+function openSmartBrowser(url, source = 'all', query = '') {
+  if (source === 'skroutz') {
+    window.open(url, '_blank');
+  } else if (source === 'stores') {
+    // Build Google Shopping URL for stores/XML feeds
+    const googleShoppingUrl = query 
+      ? `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`
+      : `https://www.google.com/search?tbm=shop`;
+    window.open(googleShoppingUrl, '_blank');
+  } else {
+    // 'all' - default behavior, search both
+    window.open(url, '_blank');
+  }
 }
 
 async function fetchAndSaveToList(query, kidName, label) {
@@ -689,12 +718,29 @@ function buildSkroutzQuery(rawQuery, kid, selectedFilters = {}) {
 
 // Dashboard component
 
-function Dashboard({ kid, onSearch, onOpenBrowser }) {
+function Dashboard({ kid, onSearch, onOpenBrowser, searchSource }) {
   const reminders    = calcDashboardReminders(kid);
   const quickLinks   = getQuickLinks(kid);
   const seasonalTabs = getSeasonalTabs(kid);
-const [showFilters, setShowFilters] = useState(false);
   const [actionItem, setActionItem] = useState(null);
+
+  // Χτίζει το σωστό URL ανά πηγή
+  const buildUrlForSource = (item, source) => {
+    const src = source || searchSource || 'skroutz';
+    const enc = encodeURIComponent(item.searchQuery || item.query || item.label || '');
+    if (src === 'stores') {
+      // Public.gr search
+      return `https://www.public.gr/search/?text=${enc}`;
+    }
+    // skroutz + all → χρησιμοποιούμε το Skroutz category URL
+    return item.url || `https://www.skroutz.gr/search?keyphrase=${enc}`;
+  };
+
+  const handleQuickLinkClick = (ql) => {
+    // Ανοίγει απευθείας με την επιλεγμένη πηγή — χωρίς ActionModal
+    const url = buildUrlForSource(ql, searchSource);
+    onOpenBrowser(url, ql.label);
+  };
 
   const urgencyColors = {
     high:   { bg: 'rgba(255,77,109,0.12)', border: 'rgba(255,77,109,0.35)', icon: '#ff4d6d' },
@@ -702,16 +748,24 @@ const [showFilters, setShowFilters] = useState(false);
     low:    { bg: 'rgba(99,102,241,0.1)',   border: 'rgba(99,102,241,0.3)',  icon: '#818cf8' },
   };
 
+  // Source badge label
+  const sourceBadge = searchSource === 'stores' ? '🛍️ Καταστήματα'
+    : searchSource === 'all' ? '🌍 Παντού'
+    : '🚀 Skroutz';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* ActionModal */}
+      {/* ActionModal — μόνο για αποθήκευση, όχι για source επιλογή */}
       {actionItem && (
         <ActionModal
           item={actionItem}
           kidName={kid?.name || ''}
           onClose={() => setActionItem(null)}
-          onOpenBrowser={onOpenBrowser}
+          onOpenBrowser={(url, label) => {
+            setActionItem(null);
+            onOpenBrowser(url, label);
+          }}
         />
       )}
 
@@ -762,14 +816,14 @@ const [showFilters, setShowFilters] = useState(false);
         <div>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, padding:'0 4px' }}>
             <span style={{ fontSize:12 }}>🌤️</span>
-            <p style={{ fontSize:11, fontWeight:900, color:'#94a3b8', letterSpacing:'0.12em', textTransform:'uppercase' }}>
+            <p style={{ fontSize:11, fontWeight:900, color:'#94a3b8', letterSpacing:'0.12em', textTransform:'uppercase', margin:0 }}>
               Εποχιακά
             </p>
           </div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {seasonalTabs.map((tab, i) => (
               <button key={i}
-                onClick={() => setActionItem({ label: tab.label, icon: tab.icon, url: tab.url, query: tab.query || tab.label })}
+                onClick={() => handleQuickLinkClick({ url: tab.url, label: tab.label, searchQuery: tab.query || tab.label })}
                 style={{
                   background: 'linear-gradient(135deg,#ff6000,#ea580c)',
                   borderRadius: 14, padding: '10px 16px',
@@ -781,7 +835,9 @@ const [showFilters, setShowFilters] = useState(false);
                 <span style={{ fontSize: 18 }}>{tab.icon}</span>
                 <div style={{ textAlign:'left' }}>
                   <p style={{ fontSize: 11, fontWeight: 900, color: 'white', margin:0 }}>{tab.label}</p>
-                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.75)', margin:0 }}>Skroutz / Αποθήκευση</p>
+                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.75)', margin:0 }}>
+                    {searchSource === 'stores' ? '🛍️ Καταστήματα' : '🚀 Skroutz'}
+                  </p>
                 </div>
               </button>
             ))}
@@ -791,16 +847,21 @@ const [showFilters, setShowFilters] = useState(false);
 
       {/* Quick links — 3 columns grid */}
       <div>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, padding:'0 4px' }}>
-          <span style={{ fontSize:12 }}>🔍</span>
-          <p style={{ fontSize:11, fontWeight:900, color:'#94a3b8', letterSpacing:'0.12em', textTransform:'uppercase' }}>
-            Γρήγορη Αναζήτηση
-          </p>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, padding:'0 4px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:12 }}>🔍</span>
+            <p style={{ fontSize:11, fontWeight:900, color:'#94a3b8', letterSpacing:'0.12em', textTransform:'uppercase', margin:0 }}>
+              Γρήγορη Αναζήτηση
+            </p>
+          </div>
+          <span style={{ fontSize:9, fontWeight:800, color:'#7c3aed', background:'#f5f3ff', padding:'3px 8px', borderRadius:8 }}>
+            {sourceBadge}
+          </span>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8 }}>
           {quickLinks.map((ql, i) => (
             <button key={i}
-              onClick={() => onOpenBrowser(ql.url)}
+              onClick={() => handleQuickLinkClick(ql)}
               style={{
                 background: 'white', borderRadius: 16, padding: '14px 8px',
                 border: '1.5px solid #f1f5f9',
@@ -812,7 +873,9 @@ const [showFilters, setShowFilters] = useState(false);
             >
               <span style={{ fontSize: 24 }}>{ql.icon}</span>
               <span style={{ fontWeight: 800, color: '#1e293b', fontSize: 10, textAlign:'center' }}>{ql.label}</span>
-              <span style={{ fontSize: 8, color: '#7c3aed', fontWeight: 800 }}>Skroutz / Αποθήκευση</span>
+              <span style={{ fontSize: 8, color: '#7c3aed', fontWeight: 800 }}>
+                {searchSource === 'stores' ? '🛍️ Καταστήματα' : '🚀 Skroutz'}
+              </span>
             </button>
           ))}
         </div>
@@ -1117,6 +1180,8 @@ export default function Home({ pendingSearch = '', onSearchConsumed }) {
   const [sortBy, setSortBy] = useState('best');
   const [preFilters, setPreFilters] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [searchSource, setSearchSource] = useState('all');
+  const [showSearchSourceModal, setShowSearchSourceModal] = useState(false);
 
   // activeCount — πόσα φίλτρα είναι ενεργά
   const activeCount = Object.values(activeFilters).flat().length;
@@ -1407,12 +1472,21 @@ export default function Home({ pendingSearch = '', onSearchConsumed }) {
             onChange={e=>handleQueryChange(e.target.value)}
             onFocus={()=>{ if(searchHistory.length>0) setShowHistory(true); }}
             onBlur={()=>setTimeout(()=>setShowHistory(false),150)}
-            onKeyDown={e=>e.key==='Enter'&&handleSearch(query,preSelected)}
+            onKeyDown={e=>{
+              if (e.key === 'Enter' && query.trim()) {
+                e.preventDefault();
+                setShowSearchSourceModal(true);
+              }
+            }}
             className="w-full bg-white px-5 py-4 pr-28 rounded-2xl shadow-lg text-sm font-semibold text-slate-700 outline-none"
           />
           <div className="absolute right-2 top-1.5 flex gap-1.5">
             {query && <button onClick={clearSearch} style={{padding:'10px',color:'rgba(255,255,255,0.5)'}}><X size={18}/></button>}
-            <button onClick={()=>handleSearch(query,preSelected)} disabled={loading}
+            <button onClick={() => {
+              if (query.trim()) {
+                setShowSearchSourceModal(true);
+              }
+            }} disabled={loading}
               style={{background:'linear-gradient(135deg,#ff4d6d,#c9184a)',color:'white',padding:'10px 12px',borderRadius:12,boxShadow:'0 4px 12px rgba(255,77,109,0.4)',display:'flex',alignItems:'center'}} className="active:scale-90 transition-transform">
               {loading ? <Loader2 size={18} className="animate-spin"/> : <Search size={18}/>}
             </button>
@@ -1547,6 +1621,7 @@ export default function Home({ pendingSearch = '', onSearchConsumed }) {
                 kid={currentKid}
                 onSearch={(q) => { setQuery(q); handleSearch(q, {}); }}
                 onOpenBrowser={openSmartBrowser}
+                searchSource={searchSource}
               />
             )}
             
@@ -1595,6 +1670,26 @@ export default function Home({ pendingSearch = '', onSearchConsumed }) {
           </div>
         )}
       </div>
+
+      {/* SearchSourceModal */}
+      <SearchSourceModal
+        isOpen={showSearchSourceModal}
+        onClose={() => setShowSearchSourceModal(false)}
+        onSelectSource={(source) => {
+          setSearchSource(source);
+          handleSearch(query, preSelected);
+          setShowSearchSourceModal(false);
+        }}
+      />
+
+      {/* SmartBrowserSheet */}
+      <SmartBrowserSheet
+        browserState={smartBrowser.state}
+        currentUrl={smartBrowser.currentUrl}
+        isProduct={smartBrowser.isProduct}
+        onClose={smartBrowser.close}
+        onSave={() => {}}
+      />
     </div>
   );
 } //

@@ -1,311 +1,115 @@
-import React, { useState, useEffect } from 'react';
-import { X, Rocket, ShoppingBag, Globe } from 'lucide-react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// src/components/SearchSourceModal.jsx
+// Bottom sheet modal — ΟΧΙ fullscreen, εμφανίζεται από κάτω
+// Props: isOpen, onSelectSource, onClose, currentSource
+import React from 'react';
+import { X } from 'lucide-react';
 
-const SearchSourceModal = ({ visible, onClose, onSelect }) => {
-  const [searchSource, setSearchSource] = useState('linkwise');
-  const [rememberChoice, setRememberChoice] = useState(false);
+const SOURCES = [
+  {
+    key: 'skroutz',
+    icon: '🚀',
+    label: 'Skroutz',
+    desc: 'Σύγκριση τιμών από εκατοντάδες καταστήματα',
+    bg: '#eff6ff', border: '#bfdbfe', active: '#3b82f6', text: '#1d4ed8',
+  },
+  {
+    key: 'stores',
+    icon: '🛍️',
+    label: 'Καταστήματα',
+    desc: 'Public, Plaisio, MediaMarkt, Jumbo κ.ά.',
+    bg: '#f0fdf4', border: '#bbf7d0', active: '#22c55e', text: '#15803d',
+  },
+  {
+    key: 'all',
+    icon: '🌍',
+    label: 'Παντού',
+    desc: 'Skroutz + Καταστήματα — πλήρης αγορά',
+    bg: '#fff7ed', border: '#fed7aa', active: '#f97316', text: '#c2410c',
+  },
+];
 
-  // Load saved preference when modal opens
-  useEffect(() => {
-    if (visible) {
-      loadPreference();
-    }
-  }, [visible]);
-
-  const loadPreference = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('searchSourcePreference');
-      const savedRemember = await AsyncStorage.getItem('rememberSearchSourceChoice');
-      
-      if (saved) {
-        setSearchSource(saved);
-      }
-      if (savedRemember) {
-        setRememberChoice(savedRemember === 'true');
-      }
-    } catch (error) {
-      console.log('Failed to load search source preference:', error);
-    }
-  };
-
-  const savePreference = async (source, remember) => {
-    try {
-      if (remember) {
-        await AsyncStorage.setItem('searchSourcePreference', source);
-        await AsyncStorage.setItem('rememberSearchSourceChoice', 'true');
-      } else {
-        await AsyncStorage.removeItem('searchSourcePreference');
-        await AsyncStorage.removeItem('rememberSearchSourceChoice');
-      }
-    } catch (error) {
-      console.log('Failed to save search source preference:', error);
-    }
-  };
-
-  const handleSelect = (source) => {
-    setSearchSource(source);
-    savePreference(source, rememberChoice);
-    onSelect(source);
-    onClose();
-  };
-
-  const handleCancel = () => {
-    savePreference(searchSource, rememberChoice);
-    onClose();
-  };
-
-  if (!visible) return null;
+export default function SearchSourceModal({ isOpen, currentSource, onSelectSource, onClose }) {
+  if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        zIndex: 9000,
+      }} />
+
       <div style={{
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 30,
-        margin: 20,
-        maxWidth: 400,
-        width: '100%',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+        position: 'fixed',
+        bottom: 0, left: 0, right: 0,
+        zIndex: 9001,
+        background: 'white',
+        borderRadius: '24px 24px 0 0',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.15)',
+        maxWidth: 480,
+        margin: '0 auto',
+        maxHeight: '52vh',
+        overflowY: 'auto',
       }}>
-        {/* Header */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 25,
+          padding: '14px 20px 10px',
+          position: 'sticky', top: 0,
+          background: 'white',
+          borderBottom: '1px solid #f1f5f9',
+          zIndex: 1,
         }}>
-          <h2 style={{
-            margin: 0,
-            fontSize: 24,
-            fontWeight: '700',
-            color: '#2d3748',
-            fontFamily: 'Arial, sans-serif',
-          }}>
-            Πού θα ψάξουμε;
-          </h2>
-          <button
-            onClick={handleCancel}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: 24,
-              cursor: 'pointer',
-              color: '#718096',
-              padding: 0,
-              width: 30,
-              height: 30,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e2e8f0', margin: '0 auto 12px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 900, color: '#1e293b', margin: 0 }}>🔍 Πού να ψάξω;</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0', fontWeight: 600 }}>Επίλεξε πηγή αναζήτησης</p>
+            </div>
+            <button onClick={onClose} style={{
+              background: '#f1f5f9', border: 'none', borderRadius: 10,
+              padding: '6px 8px', cursor: 'pointer',
+            }}>
+              <X size={16} color="#64748b" />
+            </button>
+          </div>
         </div>
 
-        {/* Buttons */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 15,
-          marginBottom: 25,
-        }}>
-          {/* Skroutz Button */}
-          <button
-            onClick={() => handleSelect('skroutz')}
-            style={{
-              backgroundColor: '#e6f3ff',
-              border: searchSource === 'skroutz' ? '3px solid #3182ce' : '3px solid transparent',
-              borderRadius: 15,
-              padding: 20,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 15,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              width: '100%',
-            }}
-            onMouseEnter={(e) => {
-              if (searchSource !== 'skroutz') {
-                e.target.style.backgroundColor = '#dbeafe';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (searchSource !== 'skroutz') {
-                e.target.style.backgroundColor = '#e6f3ff';
-              }
-            }}
-          >
-            <div style={{
-              backgroundColor: '#3182ce',
-              borderRadius: 10,
-              padding: 10,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Rocket size={24} color="white" />
-            </div>
-            <span style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: '#2d3748',
-              textAlign: 'left',
-            }}>
-              Skroutz (Σύγκριση Τιμών)
-            </span>
-          </button>
-
-          {/* Linkwise Button */}
-          <button
-            onClick={() => handleSelect('linkwise')}
-            style={{
-              backgroundColor: '#f0fdf4',
-              border: searchSource === 'linkwise' ? '3px solid #16a34a' : '3px solid transparent',
-              borderRadius: 15,
-              padding: 20,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 15,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              width: '100%',
-            }}
-            onMouseEnter={(e) => {
-              if (searchSource !== 'linkwise') {
-                e.target.style.backgroundColor = '#dcfce7';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (searchSource !== 'linkwise') {
-                e.target.style.backgroundColor = '#f0fdf4';
-              }
-            }}
-          >
-            <div style={{
-              backgroundColor: '#16a34a',
-              borderRadius: 10,
-              padding: 10,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <ShoppingBag size={24} color="white" />
-            </div>
-            <span style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: '#2d3748',
-              textAlign: 'left',
-            }}>
-              Άλλα Καταστήματα (Feeds)
-            </span>
-          </button>
-
-          {/* All Sources Button */}
-          <button
-            onClick={() => handleSelect('all')}
-            style={{
-              backgroundColor: '#fed7aa',
-              border: searchSource === 'all' ? '3px solid #ea580c' : '3px solid transparent',
-              borderRadius: 15,
-              padding: 20,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 15,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              width: '100%',
-            }}
-            onMouseEnter={(e) => {
-              if (searchSource !== 'all') {
-                e.target.style.backgroundColor = '#ffedd5';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (searchSource !== 'all') {
-                e.target.style.backgroundColor = '#fed7aa';
-              }
-            }}
-          >
-            <div style={{
-              backgroundColor: '#ea580c',
-              borderRadius: 10,
-              padding: 10,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Globe size={24} color="white" />
-            </div>
-            <span style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: '#2d3748',
-              textAlign: 'left',
-            }}>
-              Ψάξε Παντού!
-            </span>
-          </button>
-        </div>
-
-        {/* Checkbox and Cancel */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            cursor: 'pointer',
-            fontSize: 14,
-            color: '#4a5568',
-          }}>
-            <input
-              type="checkbox"
-              checked={rememberChoice}
-              onChange={(e) => setRememberChoice(e.target.checked)}
-              style={{
-                width: 16,
-                height: 16,
-                cursor: 'pointer',
-              }}
-            />
-            Να θυμάσαι την επιλογή μου
-          </label>
-          
-          <button
-            onClick={handleCancel}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#718096',
-              fontSize: 14,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              padding: 5,
-            }}
-          >
-            Cancel
-          </button>
+        <div style={{ padding: '10px 16px 28px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {SOURCES.map(src => {
+            const isActive = currentSource === src.key;
+            return (
+              <button key={src.key} onClick={() => onSelectSource(src.key)} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px',
+                borderRadius: 16,
+                border: `2px solid ${isActive ? src.active : src.border}`,
+                background: isActive ? src.bg : 'white',
+                cursor: 'pointer', transition: 'all 0.15s',
+                boxShadow: isActive ? `0 2px 10px ${src.border}` : 'none',
+                textAlign: 'left', width: '100%',
+              }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 12,
+                  background: isActive ? `${src.border}80` : '#f8fafc',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 20, flexShrink: 0,
+                }}>{src.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 900, color: isActive ? src.text : '#1e293b', margin: 0 }}>{src.label}</p>
+                  <p style={{ fontSize: 10, color: '#64748b', margin: '1px 0 0', fontWeight: 500 }}>{src.desc}</p>
+                </div>
+                {isActive && (
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: src.active,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'white', fontSize: 11, flexShrink: 0, fontWeight: 900,
+                  }}>✓</div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
-    </div>
+    </>
   );
-};
-
-export default SearchSourceModal;
+}

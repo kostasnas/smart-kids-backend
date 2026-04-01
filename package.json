@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node --max-old-space-size=400 server.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
