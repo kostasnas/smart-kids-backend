@@ -137,20 +137,24 @@ const CATEGORY_LABELS = {
   baby_clothes: '👶 Βρεφικά',
 };
 
+
 // ── Component ────────────────────────────────────────────
 const Offers = () => {
-  const { isAuthenticated } = useAuth();
-  const [kids, setKids]                               = useState([]);
-  const [selectedKid, setSelectedKid]                 = useState(null);
-  const [showFilters, setShowFilters]                 = useState(false);
-  const [activeCategory, setActiveCategory]           = useState('all');
-  const [sortBy, setSortBy]                           = useState('score');
-  const [priceRange, setPriceRange]                   = useState('all');
-  const [searchSource, setSearchSource]               = useState('skroutz');
-  const [showSearchSourceModal, setShowSearchSourceModal] = useState(false);
-  const [wishlistToast, setWishlistToast]             = useState(false);
+  const { user, isAuthenticated } = useAuth();
+  const [kids, setKids] = useState([]);
+  const [selectedKid, setSelectedKid] = useState(null);
+  
+  // States για φίλτρα και UI
+  const [filteredOffers, setFilteredOffers] = useState([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [previewItem, setPreviewItem] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('score');
+  const [priceRange, setPriceRange] = useState('all');
+  const [searchSource, setSearchSource] = useState('linkwise'); // Προεπιλογή Linkwise
 
-  // 1. Streaming Hook Integration
+  // 1. Χρήση του Streaming Hook
+  // ΠΡΟΣΟΧΗ: Βάλε το URL του Render σου εδώ αν δεν το έχεις κάνει στο hook
   const {
     items: streamItems,
     loading: streamLoading,
@@ -158,36 +162,45 @@ const Offers = () => {
     progress: streamProgress,
     isStreaming,
     fetchStream,
-    cancelStream,
     clearItems,
-  } = useStreamingOffers();
+  } = useStreamingOffers('https://smart-kids-api.onrender.com');
 
-  const smartBrowser = useSmartBrowser();
-
-  // 2. Computed values from stream
+  // 2. Computed τιμές από το stream (ΜΙΑ ΦΟΡΑ)
   const offers = streamItems;
   const loading = streamLoading || isStreaming;
-  const loadingProgress = streamProgress.label;
-  const loadingStep = { current: streamProgress.current, total: streamProgress.total };
+  const loadingProgress = streamProgress?.label || "Περίμενε...";
+  const loadingStep = { 
+    current: streamProgress?.current || 0, 
+    total: streamProgress?.total || 4 
+  };
 
   const openLink = (url, label = '') => {
-    smartBrowser.open(url, { label, kidName: selectedKid?.name || '', isWishlist: false });
+    if (window.smartBrowser) {
+      window.smartBrowser.open(url, { label, kidName: selectedKid?.name || '', isWishlist: false });
+    } else {
+      window.open(url, '_blank');
+    }
   };
 
+  // 3. Η διορθωμένη fetchOffers
   const fetchOffers = async (kid) => {
     if (!kid) return;
+    
+    // Καθαρίζουμε τα παλιά αποτελέσματα
     clearItems();
     setActiveCategory('all');
-    const queries = buildKidQueries(kid);
 
-    await fetchStream(
-      queries,
-      kid.gender,
-      kid.age,
-      kid.shoeSize || kid.shoe_size,
-      kid.clothingSize || kid.clothing_size
-    );
+    const queries = buildKidQueries(kid);
+    
+    // Κλήση του streaming
+    try {
+      await fetchStream(queries);
+    } catch (err) {
+      console.error("Failed to fetch stream:", err);
+    }
   };
+
+  // ... το υπόλοιπο component
 
   // Profile Data Loading
   async function loadKids() {
