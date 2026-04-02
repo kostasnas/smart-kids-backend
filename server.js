@@ -251,178 +251,131 @@ function extractStoreName(url) {
 }
 
 function searchLinkwise(products, offersCategory, gender, age, shoeSize, clothingSize) {
-  const genderGr = gender === 'Αγόρι' ? 'αγορι' : 'κοριτσι';
-  const oppGr = gender === 'Αγόρι' ? 'κοριτσι' : 'αγορι';
+  const genderGr  = gender === 'Αγόρι' ? 'αγορι'    : 'κοριτσι';
+  const oppGr     = gender === 'Αγόρι' ? 'κοριτσι'  : 'αγορι';
+  const genderEn  = gender === 'Αγόρι' ? 'boy'      : 'girl';
+  const oppEn     = gender === 'Αγόρι' ? 'girl'     : 'boy';
 
-  const categoryKeywords = {
-    shoes: ['παπουτσ','shoes','sneaker','boot','sandal','πεδιλ','σανδαλ','μποτ','μπαλαρ'],
-    toys: ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','game','figure','puzzle','δωρ'],
-    clothes: ['ρουχ','μπλουζ','παντελον','φορεμ','ζακετ','μπουφαν','φορμ','κολαν','shirt','jeans','dress'],
+  // ── Strict keywords ανά κατηγορία ──────────────────────────
+  const MUST_HAVE = {
+    shoes:   ['παπουτσ','sneaker','boot','sandal','πεδιλ','σανδαλ','μποτ','μπαλαρ','υποδηματ','slipper'],
+    toys:    ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','τουβλ','puzzle','παζλ','figure','κατασκευ','επιτραπεζ','δωρο παιδ'],
+    clothes: ['μπλουζ','παντελον','φορεμ','ζακετ','μπουφαν','φορμ','κολαν','shirt','jeans','dress','φουστ','πιτζαμ','εσωρουχ','καλτσ','φουτερ','hoodie'],
+    SHOES:   ['παπουτσ','sneaker','boot','sandal','πεδιλ','σανδαλ','μποτ','μπαλαρ'],
+    CLOTHES: ['μπλουζ','παντελον','φορεμ','ζακετ','μπουφαν','φορμ','κολαν','shirt','jeans','dress','φουστ','φουτερ'],
+    TOYS:    ['παιχνιδ','toy','lego','playmobil','κουκλ','puzzle','παζλ','figure','κατασκευ'],
+    SCHOOL:  ['σχολ','backpack','τσαντ','κασετιν','μολυβ','τετραδ','χρωματ'],
+    SWIMWEAR:['μαγιο','swim','μπικιν','ολοσωμ'],
+    BABY:    ['βρεφ','baby','νεογν','μωρ'],
+    SUMMER:  ['μαγιο','swim','καλοκαιρ','summer','παραλι'],
+    SPORTS:  ['αθλητ','sport','ποδοσφαιρ','μπασκετ','τρεξιμ','running'],
+    GENERAL: ['παιδ','kid','child'],
   };
 
-  let keywords = categoryKeywords[offersCategory] || [];
-  if (!keywords.length) {
-    const homeCatKeywords = {
-      SHOES: ['παπουτσ','shoes','sneaker','boot','πεδιλ','σανδαλ','μποτ'],
-      CLOTHES: ['ρουχ','μπλουζ','παντελον','φορεμ','μπουφαν','φορμ','shirt','jeans','dress'],
-      TOYS: ['παιχνιδ','toy','lego','playmobil','κουκλ','αυτοκινητ','puzzle'],
-      BABY: ['βρεφ','baby','μωρ','νεογν'],
-      GENERAL: ['παιδ','kid','child','baby','αγορ','κοριτσ'],
-    };
-    keywords = homeCatKeywords[offersCategory] || ['παιδ','kid'];
-  }
+  const keywords = MUST_HAVE[offersCategory] || MUST_HAVE['GENERAL'];
+
+  // ── BLOCK λέξεις — αποκλείουν αμέσως ────────────────────────
+  const BLOCK_ALWAYS = [
+    'ανδρ','γυναικ','men ','women ','ladies','adult','ενηλικ',
+    '/men','/women',
+  ];
 
   return products
     .filter(p => {
-      const stock = nm(p.in_stock);
-      if (stock === '0' || stock === 'n' || stock === 'false') return false;
-
-      const title = nm(p.product_name);
-      const cat = nm(p.category);
-      const brand = nm(p.brand_name);
+      const title   = nm(p.product_name || '');
+      const cat     = nm(p.category     || '');
+      const brand   = nm(p.brand_name   || '');
       const combined = `${title} ${cat} ${brand}`;
 
+      // 1. Block adult / wrong-gender items
+      if (BLOCK_ALWAYS.some(w => combined.includes(w))) return false;
+      if (combined.includes(oppGr) || combined.includes(oppEn)) return false;
+
+      // 2. Must match at least one category keyword
       if (!keywords.some(kw => combined.includes(kw))) return false;
 
+      // 3. Age relevance
+      if (!isAgeRelevant(p.product_name, age)) return false;
+
+      // 4. Shoe size filter (only if size field is present & non-empty)
       if (shoeSize && p.size && p.size.trim()) {
-        const sizes = nm(p.size).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
-        const targetSize = parseInt(shoeSize);
-        const sizeMatch = [targetSize-1, targetSize, targetSize+1].some(s => sizes.includes(String(s)));
-        if (!sizeMatch) return false;
+        const sizes = nm(p.size).split(/[,\s\/\-]+/).map(x => x.trim()).filter(Boolean);
+        if (sizes.length > 0) {
+          const target = parseInt(shoeSize);
+          const match  = [target - 1, target, target + 1].some(s => sizes.includes(String(s)));
+          if (!match) return false;
+        }
       }
 
+      // 5. Clothing size filter
       if (clothingSize && p.size && p.size.trim() && !shoeSize) {
-        const sizes = nm(p.size).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
-        if (sizes.length > 0 && !sizes.some(s => s.includes(nm(clothingSize)))) return false;
+        const sizes = nm(p.size).split(/[,\s\/\-]+/).map(x => x.trim()).filter(Boolean);
+        if (sizes.length > 0) {
+          const sizeNm = nm(clothingSize);
+          if (!sizes.some(s => s === sizeNm || s.startsWith(sizeNm))) return false;
+        }
       }
 
       return true;
     })
     .map(p => {
-      const priceValue = parseFloat((p.price||'0').replace(',','.').replace('€','').trim()) || 0;
-      const title = nm(p.product_name);
-      const catNm = nm(p.category);
+      const priceValue = parseFloat(
+        (p.price || '0').replace(/[^\d,.]/g, '').replace(',', '.')
+      ) || 0;
+      const title  = nm(p.product_name);
+      const catNm  = nm(p.category);
 
+      // Gender boost/penalty
       let genderScore = 0;
-      if (title.includes(genderGr) || catNm.includes(genderGr)) genderScore = 80;
-      if (title.includes(oppGr) || catNm.includes(oppGr)) genderScore = -150;
+      if (title.includes(genderGr) || catNm.includes(genderGr) ||
+          title.includes(genderEn) || catNm.includes(genderEn))  genderScore =  60;
 
-      if (!isAgeRelevant(p.product_name, age)) return null;
+      // Price score: sweet-spot είναι €10-60 για παιδικά
+      const priceScore = priceValue > 0
+        ? Math.max(0, 100 - Math.abs(priceValue - 35) * 1.2)
+        : 40;
 
-      const priceScore = priceValue ? Math.max(0, 100 - priceValue/2) : 50;
+      // Sale boost
+      const saleBoost = (p.on_sale === '1' || p.on_sale === true) ? 15 : 0;
+
+      // Image penalty — αν δεν έχει εικόνα
+      const imgPenalty = p.thumb_url ? 0 : -10;
 
       return {
-        product_id: `lw_${Date.now()}_${Math.random().toString(36).substr(2,6)}`,
-        title: p.product_name,
-        price: priceValue ? `${priceValue.toFixed(2)}€` : 'N/A',
+        product_id:    `lw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        title:         p.product_name,
+        price:         priceValue ? `${priceValue.toFixed(2)}€` : 'N/A',
         priceValue,
-        source: extractStoreName(p.tracking_url || ''),
-        thumbnail: p.thumb_url || null,
-        link: p.tracking_url,
-        buyLink: p.tracking_url,
-        rating: null,
-        reviews: 0,
-        brand: p.brand_name || null,
-        isAffiliate: true,
+        source:        extractStoreName(p.tracking_url || ''),
+        thumbnail:     p.thumb_url || null,
+        link:          p.tracking_url,
+        buyLink:       p.tracking_url,
+        rating:        null,
+        reviews:       0,
+        brand:         p.brand_name || null,
+        isAffiliate:   true,
         genderScore,
-        finalScore: Math.round(priceScore*0.5 + 50*0.4 + genderScore*0.1),
-        source_type: 'linkwise',
+        finalScore:    Math.round(priceScore * 0.5 + genderScore * 0.3 + saleBoost + imgPenalty),
+        source_type:   'linkwise',
       };
     })
     .filter(Boolean);
 }
 
 // ============================================================
-// STREAMING OFFERS ENDPOINT
+// STREAMING OFFERS ENDPOINT - uses cached feed (faster, correct)
 // ============================================================
 async function* streamFeedItems(feedType, maxItems = 150) {
   try {
-    const res = await fetch(LW_FEEDS[feedType]);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let itemsSent = 0;
-    
-    while (itemsSent < maxItems) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      
-      buffer += decoder.decode(value, { stream: true });
-      
-      let braceDepth = 0;
-      let lastCompleteIndex = -1;
-      let inString = false;
-      let escape = false;
-      
-      for (let i = 0; i < buffer.length; i++) {
-        const char = buffer[i];
-        
-        if (escape) {
-          escape = false;
-          continue;
-        }
-        
-        if (char === '\\') {
-          escape = true;
-          continue;
-        }
-        
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        
-        if (!inString) {
-          if (char === '{') braceDepth++;
-          if (char === '}') {
-            braceDepth--;
-            if (braceDepth === 0) {
-              lastCompleteIndex = i;
-              break;
-            }
-          }
-        }
-      }
-      
-      if (lastCompleteIndex !== -1) {
-        const completePart = buffer.slice(0, lastCompleteIndex + 1);
-        buffer = buffer.slice(lastCompleteIndex + 1);
-        
-        try {
-          const obj = JSON.parse(completePart);
-          const stock = (obj.in_stock || '').toString().toLowerCase().trim();
-          if (stock !== '0' && stock !== 'n' && stock !== 'false' && obj.price && obj.product_name) {
-            const cat = nm(obj.category || '');
-            if (!cat.includes('ανδρ') && !cat.includes('men ') && !cat.includes('/men') &&
-                !cat.includes('γυναικ') && !cat.includes('women')) {
-              yield {
-                product_name: clean(obj.product_name),
-                category: clean(obj.category),
-                brand_name: clean(obj.brand_name),
-                tracking_url: obj.tracking_url,
-                thumb_url: obj.thumb_url,
-                on_sale: obj.on_sale,
-                price: clean(obj.price),
-                discount: obj.discount,
-                size: clean(obj.size),
-              };
-              itemsSent++;
-            }
-          }
-        } catch (parseErr) {
-          console.warn('Parse error in stream:', parseErr.message);
-        }
-      }
-      
-      if (buffer.length > 500000) {
-        console.warn(`Buffer exceeded limit, truncating: ${buffer.length} bytes`);
-        buffer = buffer.slice(-100000);
-      }
+    // Χρησιμοποιούμε τον ήδη υπάρχοντα fetchFeed με cache
+    // αντί για broken streaming parser
+    const products = await fetchFeed(feedType);
+    let sent = 0;
+    for (const item of products) {
+      if (sent >= maxItems) break;
+      yield item;
+      sent++;
     }
-    
-    reader.releaseLock();
   } catch (err) {
     console.error(`Stream error for ${feedType}:`, err.message);
     yield { error: err.message, feedType };
@@ -786,6 +739,131 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to register token', message: err.message }));
     }
+  }
+  // ── /api/ai-chat — Lightweight AI endpoint (no feeds loaded) ──
+  // Δέχεται: { message, kids, history }
+  // Επιστρέφει: { text, suggestions }
+  else if (parsedUrl.pathname === '/api/ai-chat' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk.toString());
+    req.on('end', async () => {
+      try {
+        const { message, kids = [], history = [] } = JSON.parse(body || '{}');
+        if (!message) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'message required' }));
+          return;
+        }
+
+        const GROQ_KEY = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+        if (!GROQ_KEY) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'GROQ_API_KEY not configured on server' }));
+          return;
+        }
+
+        // Kid context — compact
+        const kidCtx = kids.length === 0
+          ? 'Δεν υπάρχουν καταχωρημένα παιδιά.'
+          : kids.slice(0, 3).map(k => {
+              const parts = [`${k.name}: ${k.gender || ''}, ${k.age || '?'} ετών`];
+              if (k.shoeSize || k.shoe_size) parts.push(`👟${k.shoeSize || k.shoe_size}`);
+              if (k.clothingSize || k.clothing_size) parts.push(`👕${k.clothingSize || k.clothing_size}`);
+              if (k.favoriteCharacter || k.favorite_character)
+                parts.push(`⭐${k.favoriteCharacter || k.favorite_character}`);
+              return '• ' + parts.join(' | ');
+            }).join('\n');
+
+        const month = new Date().getMonth();
+        const season = month >= 2 && month <= 4 ? 'Άνοιξη'
+          : month >= 5 && month <= 7 ? 'Καλοκαίρι'
+          : month >= 8 && month <= 10 ? 'Φθινόπωρο' : 'Χειμώνας';
+
+        const systemPrompt = `Είσαι ο AI σύμβουλος αγορών της εφαρμογής Smart Kids για Έλληνες γονείς.
+
+ΠΡΟΦΙΛ ΠΑΙΔΙΩΝ:
+${kidCtx}
+
+ΤΡΕΧΟΥΣΑ ΕΠΟΧΗ: ${season}
+
+ΚΑΝΟΝΕΣ:
+1. Απαντάς ΠΑΝΤΑ στα Ελληνικά
+2. Σύντομη εισαγωγή (1-2 προτάσεις) + JSON block
+3. 3-4 προτάσεις μόνο
+4. Αν υπάρχει αγαπημένος χαρακτήρας, ενσωμάτωσέ τον στο query
+
+ΚΑΝΟΝΕΣ ΓΙΑ "query" (πηγαίνει στο Skroutz — 3-5 λέξεις):
+• Παπούτσια → "παπούτσια [φύλο] [νούμερο]"
+• Ρούχα → "[είδος] [φύλο] [ηλικία] ετών"
+• Παπούτσια παραλίας → "παπούτσια θαλάσσης [φύλο] [νούμερο]"
+• Μαγιό → "μαγιό [φύλο] [ηλικία] ετών"
+• Παιχνίδια → "παιχνίδια [αγόρια/κορίτσια]" ή "παιχνίδια [χαρακτήρας] [φύλο]"
+• Λαμπάδες → "λαμπάδα [χαρακτήρας] [φύλο]"
+• Σχολικά → "σχολική τσάντα [φύλο]"
+
+FORMAT (ΥΠΟΧΡΕΩΤΙΚΟ):
+\`\`\`json
+[{"name":"Σύντομο όνομα","priceLabel":"~XX-XXέ","query":"skroutz query","why":"1 πρόταση"}]
+\`\`\``;
+
+        // Compact history — last 4 turns only
+        const compactHistory = history.slice(-4).map(m => ({
+          role:    m.role,
+          content: (m.content || m.text || '').slice(0, 300),
+        }));
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${GROQ_KEY}`,
+          },
+          body: JSON.stringify({
+            model:       'llama-3.1-8b-instant',  // 8B αντί για 70B — 5x γρηγορότερο, λιγότερη μνήμη
+            messages:    [
+              { role: 'system', content: systemPrompt },
+              ...compactHistory,
+              { role: 'user', content: message.slice(0, 500) },
+            ],
+            temperature: 0.6,
+            max_tokens:  700,
+          }),
+          signal: AbortSignal.timeout(25000),
+        });
+
+        if (!groqRes.ok) {
+          const err = await groqRes.text();
+          throw new Error(`Groq ${groqRes.status}: ${err.slice(0, 200)}`);
+        }
+
+        const data = await groqRes.json();
+        const raw  = data.choices?.[0]?.message?.content || '';
+
+        // Parse suggestions
+        let suggestions = null;
+        try {
+          const m = raw.match(/```json\s*([\s\S]*?)```/);
+          if (m) {
+            const parsed = JSON.parse(m[1]);
+            if (Array.isArray(parsed)) {
+              suggestions = parsed.filter(s => s.name && s.query).slice(0, 4);
+            }
+          }
+        } catch {}
+
+        const text = raw.replace(/```json[\s\S]*?```/, '').trim();
+
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ text, suggestions }));
+
+        if (global.gc) global.gc();
+
+      } catch (err) {
+        console.error('❌ /api/ai-chat error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
   }
   else {
     res.writeHead(404); res.end('Not Found');

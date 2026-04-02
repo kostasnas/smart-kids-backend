@@ -429,61 +429,101 @@ const AIAdvisor = () => {
 
     try {
       const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY;
-      const TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY;
+      const API_URL    = import.meta.env.VITE_API_URL || 'https://smart-kids-api.onrender.com';
 
-      // Check if API keys are available
-      if (!GROQ_KEY) {
-        console.error('❌ GROQ_API_KEY is missing');
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Συγγνώμη, το API key για τον AI σύμβουλο δεν είναι διαθέσιμο.', text: 'Συγγνώμη, το API key για τον AI σύμβουλο δεν είναι διαθέσιμο.', suggestions: null }]);
-        setLoading(false);
-        return;
+      // ── Κτίζουμε το kid context για τον server ────────────────
+      const kidsPayload = kids.slice(0, 3).map(k => ({
+        name:             k.name,
+        gender:           k.gender,
+        age:              k.age || calcAge(k.birthdate || k.birthDate),
+        shoeSize:         k.shoeSize || k.shoe_size || '',
+        clothingSize:     k.clothingSize || k.clothing_size || '',
+        favoriteCharacter: k.favoriteCharacter || k.favorite_character || '',
+        favoriteSport:    k.favoriteSport || k.favorite_sport || '',
+      }));
+
+      const historyPayload = messages.slice(-4).map(m => ({
+        role:    m.role,
+        content: (m.content || m.text || '').slice(0, 300),
+      }));
+
+      let raw = '';
+
+      // ── Βήμα 1: Προσπαθούμε server endpoint (llama-8b, ελαφρύ) ──
+      try {
+        const serverRes = await fetch(`${API_URL}/api/ai-chat`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            message: userMessage,
+            kids:    kidsPayload,
+            history: historyPayload,
+          }),
+          signal: AbortSignal.timeout(28000),
+        });
+
+        if (serverRes.ok) {
+          const serverData = await serverRes.json();
+          // Server επιστρέφει { text, suggestions } ήδη parsed
+          const text = serverData.text || '';
+          const suggestions = serverData.suggestions || null;
+
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: text,
+            text,
+            suggestions,
+          }]);
+          setLoading(false);
+          return;
+        }
+        console.warn('Server AI returned', serverRes.status, '— falling back to direct Groq');
+      } catch (serverErr) {
+        console.warn('Server AI unreachable:', serverErr.message, '— using direct Groq');
       }
 
-      // ── Βήμα 1: Tavily web search ──
+      // ── Βήμα 2: Fallback — καλούμε Groq απευθείας (70b) ─────
+      if (!GROQ_KEY) throw new Error('Δεν βρέθηκε AI key');
+
+      // Tavily web search (optional)
       let webContext = '';
+      const TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY;
       if (TAVILY_KEY) {
         try {
           const tavilyRes = await fetch('https://api.tavily.com/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              api_key: TAVILY_KEY,
-              query: `παιδικά προϊόντα ${userMessage} Ελλάδα αγορά`,
+              api_key:      TAVILY_KEY,
+              query:        `παιδικά προϊόντα ${userMessage} Ελλάδα`,
               search_depth: 'basic',
-              max_results: 4,
+              max_results:  3,
               include_answer: true,
             }),
+            signal: AbortSignal.timeout(6000),
           });
           if (tavilyRes.ok) {
-            const tavilyData = await tavilyRes.json();
-            const results = tavilyData.results || [];
-            if (tavilyData.answer) webContext += `Σύνοψη: ${tavilyData.answer}\n\n`;
-            // Limit to first 10 results to save memory
-            results.slice(0, 10).forEach((r, i) => {
-              // Clean strings - keep only essential fields, limit content size
-              const title = (r.title || '').slice(0, 100);
-              const content = (r.content || '').slice(0, 200);
-              webContext += `[${i+1}] ${title}\n${content}\n\n`;
+            const td = await tavilyRes.json();
+            if (td.answer) webContext = `Σύνοψη: ${td.answer.slice(0, 200)}\n`;
+            (td.results || []).slice(0, 3).forEach((r, i) => {
+              webContext += `[${i+1}] ${(r.title||'').slice(0,80)}\n${(r.content||'').slice(0,150)}\n`;
             });
           }
         } catch {}
       }
 
-      // ── Βήμα 2: Kid context ──
-      const kidContext = kids.length === 0 ? 'Δεν υπάρχουν καταχωρημένα παιδιά.'
+      const kidContext = kids.length === 0
+        ? 'Δεν υπάρχουν καταχωρημένα παιδιά.'
         : kids.map(k => {
-            const age = k.age || calcAge(k.birthdate || k.birthDate);
+            const age  = k.age || calcAge(k.birthdate || k.birthDate);
             const parts = [`${k.name}: ${k.gender || ''}, ${age} ετών`];
             if (k.shoeSize  || k.shoe_size)  parts.push(`παπούτσι νούμερο ${k.shoeSize || k.shoe_size}`);
             if (k.clothingSize || k.clothing_size) parts.push(`ρούχα μέγεθος ${k.clothingSize || k.clothing_size}`);
-            if (k.favoriteCharacter || k.favorite_character) parts.push(`αγαπημένος χαρακτήρας: ${k.favoriteCharacter || k.favorite_character}`);
-            if (k.favoriteSport || k.favorite_sport) parts.push(`αγαπημένο άθλημα: ${k.favoriteSport || k.favorite_sport}`);
+            if (k.favoriteCharacter || k.favorite_character) parts.push(`⭐ ${k.favoriteCharacter || k.favorite_character}`);
             return '• ' + parts.join(', ');
           }).join('\n');
 
-      // ── Βήμα 3: System prompt ──
       const systemPrompt = `Είσαι ο AI σύμβουλος αγορών της εφαρμογής Smart Kids για Έλληνες γονείς.
-Έχεις πρόσβαση σε πραγματικά δεδομένα από το web — χρησιμοποίησέ τα για να προτείνεις ΥΠΑΡΚΤΑ προϊόντα.
 
 ΠΡΟΦΙΛ ΠΑΙΔΙΩΝ:
 ${kidContext}
@@ -491,102 +531,68 @@ ${kidContext}
 ΤΡΕΧΟΥΣΑ ΕΠΟΧΗ: ${getCurrentSeason()}
 ${webContext ? `\nΔΕΔΟΜΕΝΑ ΑΠΟ WEB:\n${webContext}` : ''}
 
-ΡΟΛΟΣ: Βοηθάς τον γονιό να βρει αυτό που χρειάζεται το παιδί, ανάλογα με εποχή, ηλικία, μεγέθη και προτιμήσεις.
-Αν ρωτηθείς για παιδί με ειδικές ανάγκες (τυφλό, κωφό, κινητικά προβλήματα κλπ), δώσε εξειδικευμένες, υπαρκτές επιλογές.
-
-ΣΗΜΑΝΤΙΚΗ ΣΗΜΕΙΩΣΗ: Επειδή το In-App Browser δεν επιστρέφει λίστα προϊόντων στον server:
-- Αν ο χρήστης ψάχνει στο Skroutz, πες: "Πλοηγηθείτε στο Skroutz για να βρείτε το προϊόν που σας αρέσει και πατήστε Αποθήκευση για να το παρακολουθήσω!"
-- Αν ο χρήστης ψάχνει σε Retail Shops (Linkwise), μπορείς να αναλύσεις κανονικά τα προϊόντα.
-
-ΚΑΝΟΝΕΣ ΑΠΑΝΤΗΣΗΣ:
+ΚΑΝΟΝΕΣ:
 1. Απαντάς ΠΑΝΤΑ στα Ελληνικά
 2. Σύντομη εισαγωγή (1-2 προτάσεις) + JSON block στο τέλος
 3. 3-4 προτάσεις μόνο
-4. Αν το παιδί έχει αγαπημένο χαρακτήρα/άθλημα, ενσωμάτωσέ τον στο query
 
-ΚΑΝΟΝΕΣ ΓΙΑ ΤΟ "query" ΠΕΔΙΟ (ΚΡΙΣΙΜΟ — πηγαίνει στο Skroutz):
-✅ ΠΑΠΟΥΤΣΙΑ → "[είδος] [φύλο] [νούμερο]"
-   Παράδειγμα: "παπούτσια αγόρι 28"
-   ⚠️ Παπούτσια παραλίας/θαλάσσης → "παπούτσια θαλάσσης [φύλο] [νούμερο]" (ΟΧΙ "παραλίας"!)
+ΚΑΝΟΝΕΣ ΓΙΑ "query" (3-5 λέξεις, πηγαίνει στο Skroutz):
+• Παπούτσια → "παπούτσια [φύλο] [νούμερο]"
+• Παπούτσια παραλίας → "παπούτσια θαλάσσης [φύλο] [νούμερο]"
+• Ρούχα → "[είδος] [φύλο] [ηλικία] ετών"
+• Μαγιό → "μαγιό [φύλο] [ηλικία] ετών"
+• Παιχνίδια → "παιχνίδια [αγόρια/κορίτσια]"
+• Λαμπάδες → "λαμπάδα [χαρακτήρας] [φύλο]"
 
-✅ ΡΟΥΧΑ (μπλούζες/παντελόνια/φόρμες/φούτερ/φορέματα) → "[είδος] [φύλο] [ηλικία] ετών"
-   Παράδειγμα: "μπλούζες αγόρι 7 ετών"
-
-✅ ΜΑΓΙΟ → "μαγιό [φύλο] [ηλικία] ετών"
-
-✅ ΠΑΙΧΝΙΔΙΑ → "παιχνίδια [αγόρια/κορίτσια]"
-   Με χαρακτήρα: "παιχνίδια Spiderman αγόρια"
-
-✅ ΛΑΜΠΑΔΕΣ → "λαμπάδα [φύλο]"
-   Με χαρακτήρα: "λαμπάδα Frozen κορίτσι"
-
-✅ ΣΧΟΛΙΚΑ → "σχολική τσάντα [φύλο]"
-   ❌ ΜΗΝ βάζεις νούμερο/μέγεθος στα σχολικά!
-
-✅ ΠΟΔΗΛΑΤΑ → "ποδήλατο παιδικό [ηλικία] ετών"
-
-✅ ΚΑΠΕΛΑ/ΑΞΕΣΟΥΑΡ → "[είδος] παιδικό [φύλο]"
-
-ΓΕΝΙΚΟΣ ΚΑΝΟΝΑΣ: Κράτα κάθε query σε 3-5 λέξεις ΜΟΝΟ. Χρησιμοποίησε ΠΑΝΤΑ ελληνικούς όρους όπως τους χρησιμοποιεί το Skroutz.gr.
-
-FORMAT JSON (ΥΠΟΧΡΕΩΤΙΚΟ στο τέλος):
+FORMAT (ΥΠΟΧΡΕΩΤΙΚΟ):
 \`\`\`json
-[{"name":"Σύντομο όνομα","priceLabel":"~XX-XXέ","query":"απλό skroutz query","why":"1 πρόταση"}]
-\`\`\`
-`;
+[{"name":"Σύντομο όνομα","priceLabel":"~XX-XXέ","query":"skroutz query","why":"1 πρόταση"}]
+\`\`\``;
 
-      // ── Βήμα 4: Groq LLM ──
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
+          model:       'llama-3.3-70b-versatile',
+          messages:    [
             { role: 'system', content: systemPrompt },
             ...messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
             { role: 'user', content: userMessage },
           ],
           temperature: 0.65,
-          max_tokens: 900,
+          max_tokens:  900,
         }),
+        signal: AbortSignal.timeout(30000),
       });
 
-      if (!response.ok) throw new Error(`API ${response.status}`);
+      if (!response.ok) throw new Error(`Groq API ${response.status}`);
       const data = await response.json();
-      const raw = data.choices?.[0]?.message?.content;
-      if (!raw) throw new Error('No response');
+      raw = data.choices?.[0]?.message?.content || '';
+      if (!raw) throw new Error('No response from AI');
 
       let suggestions = null;
       try {
         const m = raw.match(/```json\s*([\s\S]*?)```/);
         if (m) {
-          suggestions = JSON.parse(m[1]);
-          // Validate suggestions structure
-          if (!Array.isArray(suggestions)) {
-            suggestions = null;
-          } else {
-            suggestions = suggestions.filter(s => s.name && s.query);
-          }
+          const parsed = JSON.parse(m[1]);
+          if (Array.isArray(parsed)) suggestions = parsed.filter(s => s.name && s.query).slice(0, 4);
         }
-      } catch (parseError) {
-        console.error('JSON parsing error:', parseError);
-        console.error('Raw response:', raw);
-        suggestions = null;
-      }
-      const text = raw.replace(/```json[\s\S]*?```/, '').trim();
+      } catch {}
 
-      // Check if we got valid suggestions
-      if (!suggestions || suggestions.length === 0) {
-        // No valid suggestions - likely due to wrong feed or no results
-        const fallbackText = 'Δεν βρήκα συγκεκριμένες προσφορές γι\' αυτή την κατηγορία στα καταστήματα, δοκιμάστε την αναζήτηση στο Skroutz!';
-        setMessages(prev => [...prev, { role: 'assistant', content: fallbackText, text: fallbackText, suggestions: null }]);
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: raw, text, suggestions }]);
-      }
+      const aiText = raw.replace(/```json[\s\S]*?```/, '').trim();
+      setMessages(prev => [...prev, { role: 'assistant', content: aiText, text: aiText, suggestions }]);
+
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Συγγνώμη, κάτι πήγε στραβά!', text: 'Συγγνώμη, κάτι πήγε στραβά. Δοκίμασε ξανά!', suggestions: null }]);
+      console.error('AI error:', err.message);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Συγγνώμη, δεν μπόρεσα να απαντήσω. Δοκίμασε ξανά.',
+        text:    'Συγγνώμη, δεν μπόρεσα να απαντήσω. Δοκίμασε ξανά.',
+        suggestions: null,
+      }]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleOpenModal = (suggestion) => {
