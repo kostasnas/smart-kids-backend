@@ -1,8 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client with fallback values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://larenreyyzwexzttfyog.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
+const envUrl = import.meta.env.VITE_SUPABASE_URL;
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = envUrl || 'https://larenreyyzwexzttfyog.supabase.co';
+const supabaseAnonKey = envKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhcmVucmV5eXp3ZXh6dHRmeW9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzOTk4ODQsImV4cCI6MjA4Nzk3NTg4NH0.d-8S31iz-Ni3vBhGTniZq09fNu1e438y6NngsL7s2jw';
+
+// Log the actual values being used
+console.log('🔑 Environment Variables Check:');
+console.log('  - VITE_SUPABASE_URL found:', !!envUrl);
+console.log('  - VITE_SUPABASE_ANON_KEY found:', !!envKey);
+console.log('🔑 Current Supabase URL:', supabaseUrl);
+console.log('🔑 Current Supabase Key:', supabaseAnonKey.substring(0, 10) + '...');
+console.log('🔑 Using fallback URL:', supabaseUrl === 'https://larenreyyzwexzttfyog.supabase.co');
+console.log('🔑 Using fallback Key:', supabaseAnonKey.startsWith('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'));
 
 // Log warning if using placeholder values
 if (supabaseUrl === 'https://larenreyyzwexzttfyog.supabase.co') {
@@ -10,7 +21,12 @@ if (supabaseUrl === 'https://larenreyyzwexzttfyog.supabase.co') {
   console.warn('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 // ============================================================
 // KIDS PROFILES

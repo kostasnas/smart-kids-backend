@@ -778,7 +778,14 @@ const server = http.createServer(async (req, res) => {
         }
 
         const GROQ_KEY = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+        console.log('🔑 AI Endpoint - GROQ_KEY check:');
+        console.log('  - process.env.GROQ_API_KEY:', !!process.env.GROQ_API_KEY);
+        console.log('  - process.env.VITE_GROQ_API_KEY:', !!process.env.VITE_GROQ_API_KEY);
+        console.log('  - GROQ_KEY found:', !!GROQ_KEY);
+        console.log('  - GROQ_KEY length:', GROQ_KEY ? GROQ_KEY.length : 0);
+        
         if (!GROQ_KEY) {
+          console.error('❌ GROQ_API_KEY not configured on server');
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'GROQ_API_KEY not configured on server' }));
           return;
