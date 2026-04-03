@@ -31,7 +31,7 @@ export const supabaseService = {
       // Add calculated age
       return (data || []).map(kid => ({
         ...kid,
-        age: this.calculateAge(kid.birthdate),
+        age: supabaseService.calculateAge(kid.birthdate),
         shoeSize: kid.shoe_size || '',
         clothingSize: kid.clothing_size || '',
         lastShoeUpdate: kid.last_shoe_update || '',
@@ -81,7 +81,7 @@ export const supabaseService = {
       
       return {
         ...data,
-        age: this.calculateAge(data.birthdate)
+        age: supabaseService.calculateAge(data.birthdate)
       };
     } catch (error) {
       console.error('Error creating kid:', error);
@@ -119,7 +119,7 @@ export const supabaseService = {
       
       return {
         ...data,
-        age: this.calculateAge(data.birthdate)
+        age: supabaseService.calculateAge(data.birthdate)
       };
     } catch (error) {
       console.error('Error updating kid:', error);
@@ -224,7 +224,7 @@ export const supabaseService = {
       if (error) throw error;
 
       // Log price change to history
-      await this.addPriceHistory(itemId, newPrice);
+      await supabaseService.addPriceHistory(itemId, newPrice);
     } catch (error) {
       console.error('Error updating price:', error);
       throw error;
@@ -299,7 +299,7 @@ export const supabaseService = {
           
           if (!existingKids || existingKids.length === 0) {
             for (const kid of kidsArray) {
-              await this.createKid({
+              await supabaseService.createKid({
                 name: kid.name,
                 avatar: kid.avatar,
                 gender: kid.gender,
@@ -329,7 +329,7 @@ export const supabaseService = {
           
           if (!existingItems || existingItems.length === 0) {
             for (const item of wishlistArray) {
-              await this.addToWishlist({
+              await supabaseService.addToWishlist({
                 title: item.title,
                 thumbnail: item.thumbnail,
                 store: item.store,

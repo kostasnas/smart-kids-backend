@@ -144,6 +144,8 @@ const Offers = () => {
   const [kids, setKids] = useState([]);
   const [selectedKid, setSelectedKid] = useState(null);
   
+const smartBrowser = useSmartBrowser();
+
   // States για φίλτρα και UI
   
   const [showFilters, setShowFilters] = useState(false);
@@ -152,8 +154,9 @@ const Offers = () => {
   const [sortBy, setSortBy] = useState('score');
   const [priceRange, setPriceRange] = useState('all');
   const [searchSource, setSearchSource] = useState('linkwise'); // Προεπιλογή Linkwise
-const cancelStream = () => clearItems();
-const [showSearchSourceModal, setShowSearchSourceModal] = useState(false);
+  const [wishlistToast, setWishlistToast] = useState(false);
+  const cancelStream = () => clearItems();
+  const [showSearchSourceModal, setShowSearchSourceModal] = useState(false);
   // 1. Χρήση του Streaming Hook
   // ΠΡΟΣΟΧΗ: Βάλε το URL του Render σου εδώ αν δεν το έχεις κάνει στο hook
   const {
