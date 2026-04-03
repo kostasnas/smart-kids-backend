@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client with fallback values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://larenreyyzwexzttfyog.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
 
 // Log warning if using placeholder values
-if (supabaseUrl === 'https://placeholder.supabase.co') {
-  console.warn('⚠️ Supabase environment variables not found. Using placeholder values.');
+if (supabaseUrl === 'https://larenreyyzwexzttfyog.supabase.co') {
+  console.warn('⚠️ Supabase environment variables not found. Using hardcoded fallback URL.');
   console.warn('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
 }
 
@@ -21,15 +21,21 @@ export const supabaseService = {
   // Get all kids for current user
   async getKids() {
     try {
+      console.log('🔍 Fetching kids from Supabase...');
       const { data, error } = await supabase
         .from('kids_profiles')
         .select('*')
         .order('created_at', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase getKids error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Raw kids data:', data);
       
       // Add calculated age
-      return (data || []).map(kid => ({
+      const processedKids = (data || []).map(kid => ({
         ...kid,
         age: supabaseService.calculateAge(kid.birthdate),
         shoeSize: kid.shoe_size || '',
@@ -43,8 +49,11 @@ export const supabaseService = {
         favoriteCharacter: kid.favorite_character || '',
         favoriteSport: kid.favorite_sport || '',
       }));
+      
+      console.log('✅ Processed kids:', processedKids);
+      return processedKids;
     } catch (error) {
-      console.error('Error fetching kids:', error);
+      console.error('❌ Error fetching kids:', error);
       throw error;
     }
   },
@@ -52,39 +61,54 @@ export const supabaseService = {
   // Create new kid profile
   async createKid(kidData) {
     try {
+      console.log('🔍 Creating kid profile:', kidData);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) {
+        console.error('❌ User not authenticated');
+        throw new Error('Not authenticated');
+      }
+      
+      console.log('✅ User authenticated:', user.id);
+      
+      const insertData = {
+        user_id: user.id,
+        name: kidData.name,
+        avatar: kidData.avatar,
+        gender: kidData.gender,
+        birthdate: kidData.birthdate,
+        shoe_size: kidData.shoeSize || null,
+        clothing_size: kidData.clothingSize || null,
+        last_shoe_update: kidData.lastShoeUpdate || null,
+        last_clothes_update: kidData.lastClothesUpdate || null,
+        notify_birthday: kidData.notifyBirthday !== false,
+        notify_size: kidData.notifySize !== false,
+        notify_school: kidData.notifySchool !== false,
+        notify_seasonal: kidData.notifySeasonal !== false,
+        favorite_character: kidData.favoriteCharacter || null,
+        favorite_sport: kidData.favoriteSport || null,
+      };
+      
+      console.log('📝 Inserting data:', insertData);
       
       const { data, error } = await supabase
         .from('kids_profiles')
-        .insert([{
-          user_id: user.id,
-          name: kidData.name,
-          avatar: kidData.avatar,
-          gender: kidData.gender,
-          birthdate: kidData.birthdate,
-          shoe_size: kidData.shoeSize || null,
-          clothing_size: kidData.clothingSize || null,
-          last_shoe_update: kidData.lastShoeUpdate || null,
-          last_clothes_update: kidData.lastClothesUpdate || null,
-          notify_birthday: kidData.notifyBirthday !== false,
-          notify_size: kidData.notifySize !== false,
-          notify_school: kidData.notifySchool !== false,
-          notify_seasonal: kidData.notifySeasonal !== false,
-          favorite_character: kidData.favoriteCharacter || null,
-          favorite_sport: kidData.favoriteSport || null,
-        }])
+        .insert([insertData])
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase createKid error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Kid created successfully:', data);
       
       return {
         ...data,
         age: supabaseService.calculateAge(data.birthdate)
       };
     } catch (error) {
-      console.error('Error creating kid:', error);
+      console.error('❌ Error creating kid:', error);
       throw error;
     }
   },

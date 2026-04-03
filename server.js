@@ -117,20 +117,34 @@ async function fetchFeed(type) {
     const res = await fetch(LW_FEEDS[type]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    const text = await res.text();
-    console.log(`📥 Feed ${type} raw size: ${Math.round(text.length/1024)}KB`);
-    
-    const MAX_RAW_SIZE = 5 * 1024 * 1024;
-    let limitedText = text;
-    if (text.length > MAX_RAW_SIZE) {
-      console.log(`⚠️ Feed ${type} too large (${Math.round(text.length/1024)}KB), truncating to ${Math.round(MAX_RAW_SIZE/1024)}KB`);
-      limitedText = text.slice(0, MAX_RAW_SIZE);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let totalSize = 0;
+    const MAX_RAW_SIZE = 3 * 1024 * 1024; // Reduced to 3MB
+    const MAX_PER_FEED = 100; // Reduced to 100 items
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      buffer += chunk;
+      totalSize += value.length;
+      
+      if (totalSize > MAX_RAW_SIZE) {
+        console.log(`⚠️ Feed ${type} size limit reached (${Math.round(totalSize/1024)}KB)`);
+        break;
+      }
     }
+
+    console.log(`📥 Feed ${type} streamed size: ${Math.round(totalSize/1024)}KB`);
     
-    const MAX_PER_FEED = 150;
-    feedCache[type] = parseFeedLimited(limitedText, MAX_PER_FEED);
+    feedCache[type] = parseFeedLimited(buffer, MAX_PER_FEED);
     feedCacheTime[type] = now;
     console.log(`✅ Feed ${type}: ${feedCache[type].length} products kept`);
+    
+    buffer = null;
     
     if (global.gc) {
       console.log(`🗑️ Forcing GC after ${type} feed...`);
@@ -615,7 +629,15 @@ const server = http.createServer(async (req, res) => {
 
     write({ type: 'done', total: totalSent });
     res.end();
-    if (global.gc) global.gc();
+    
+    // Clear large objects to free memory
+    seenIds.clear();
+    queries = null;
+    
+    if (global.gc) {
+      console.log('🗑️ Forcing GC after streaming search...');
+      global.gc();
+    }
   }
   
   // ── /api/extract-image endpoint (preserved) ──
